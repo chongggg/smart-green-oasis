@@ -17,7 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface AddPlantProps {
   database: Database;
@@ -39,6 +40,7 @@ type FormValues = z.infer<typeof formSchema>;
 export const AddPlant = ({ database, toast }: AddPlantProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [permissionError, setPermissionError] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -63,6 +65,7 @@ export const AddPlant = ({ database, toast }: AddPlantProps) => {
 
     setIsSubmitting(true);
     setError(null);
+    setPermissionError(false);
     
     try {
       // Get a reference to the plants collection
@@ -92,7 +95,15 @@ export const AddPlant = ({ database, toast }: AddPlantProps) => {
       });
     } catch (error) {
       console.error("Error adding plant:", error);
-      setError(`Failed to add plant: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Check if it's a permission error
+      if (errorMessage.includes('PERMISSION_DENIED') || errorMessage.includes('permission denied')) {
+        setPermissionError(true);
+        setError("Firebase permission denied. Please check your database rules in the Firebase Console.");
+      } else {
+        setError(`Failed to add plant: ${errorMessage}`);
+      }
       
       toast({
         title: "Error",
@@ -108,7 +119,27 @@ export const AddPlant = ({ database, toast }: AddPlantProps) => {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Add New Plant</h1>
       
-      {error && (
+      {permissionError && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Firebase Permission Error</AlertTitle>
+          <AlertDescription>
+            <p>Your application doesn't have permission to write to the Firebase database.</p>
+            <p className="mt-2">To fix this, go to the Firebase Console and update your database rules:</p>
+            <pre className="bg-secondary p-2 mt-2 rounded text-xs overflow-x-auto">
+              {`{
+  "rules": {
+    ".read": true,
+    ".write": true
+  }
+}`}
+            </pre>
+            <p className="mt-2 text-sm">Note: These rules allow anyone to read/write your database. For production, use more restrictive rules.</p>
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {error && !permissionError && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
           <p>{error}</p>
         </div>

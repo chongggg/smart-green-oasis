@@ -1,7 +1,5 @@
-
 import React, { useEffect, useState } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set, get } from 'firebase/database';
+import { ref, onValue, set, get } from 'firebase/database';
 import { 
   Thermometer, 
   Droplet, 
@@ -21,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 
+import { database } from '@/lib/firebase-config'; // Import from our new utility file
 import { Dashboard } from '@/components/Dashboard';
 import { Controls } from '@/components/Controls';
 import { HistoricalData } from '@/components/HistoricalData';
@@ -41,7 +40,6 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const database = getDatabase(app);
 
 const Index = () => {
   const { toast } = useToast();
