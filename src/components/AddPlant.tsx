@@ -29,33 +29,33 @@ const formSchema = z.object({
   plantingDate: z.string().refine(val => !isNaN(Date.parse(val)), {
     message: 'Please enter a valid date',
   }),
-  growthDuration: z.string().transform(val => parseInt(val)).refine(val => !isNaN(val) && val > 0, {
-    message: 'Duration must be a positive number',
-  }),
+  growthDuration: z.coerce.number().positive('Duration must be a positive number'),
   cropType: z.string().min(1, 'Crop type is required'),
 });
+
+type FormValues = z.infer<typeof formSchema>;
 
 export const AddPlant = ({ database, toast }: AddPlantProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: '',
       plantingDate: new Date().toISOString().split('T')[0], // Today's date as default
-      growthDuration: '90', // Using string as per the schema definition
+      growthDuration: 90, // Now using a number instead of string
       cropType: '',
     },
   });
 
-  const onSubmit = async (data: z.infer<typeof formSchema>) => {
+  const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
     try {
       // Push data to Firebase
       await push(ref(database, 'plants'), {
         name: data.name,
         plantingDate: data.plantingDate,
-        growthDuration: parseInt(data.growthDuration.toString()), // Ensure it's a number
+        growthDuration: data.growthDuration, // Already a number thanks to schema
         cropType: data.cropType,
         createdAt: Date.now()
       });
@@ -70,7 +70,7 @@ export const AddPlant = ({ database, toast }: AddPlantProps) => {
       form.reset({
         name: '',
         plantingDate: new Date().toISOString().split('T')[0],
-        growthDuration: '90', // Using string as per the schema definition
+        growthDuration: 90, // Now using a number instead of string
         cropType: '',
       });
     } catch (error) {
@@ -137,7 +137,12 @@ export const AddPlant = ({ database, toast }: AddPlantProps) => {
                   <FormItem>
                     <FormLabel>Expected Growth Duration (days)</FormLabel>
                     <FormControl>
-                      <Input type="number" min="1" {...field} />
+                      <Input 
+                        type="number" 
+                        min="1" 
+                        {...field} 
+                        onChange={(e) => field.onChange(Number(e.target.value))}
+                      />
                     </FormControl>
                     <FormDescription>
                       How many days until expected harvest?
