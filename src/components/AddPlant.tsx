@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Database, ref, push } from 'firebase/database';
+import { Database, ref, push, DatabaseReference } from 'firebase/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Form,
@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Loader2 } from "lucide-react";
 
 interface AddPlantProps {
   database: Database;
@@ -37,25 +38,41 @@ type FormValues = z.infer<typeof formSchema>;
 
 export const AddPlant = ({ database, toast }: AddPlantProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: '',
       plantingDate: new Date().toISOString().split('T')[0], // Today's date as default
-      growthDuration: 90, // Now using a number instead of string
+      growthDuration: 90,
       cropType: '',
     },
   });
 
   const onSubmit = async (data: FormValues) => {
+    if (!database) {
+      setError("Firebase database connection not established");
+      toast({
+        title: "Connection Error",
+        description: "Cannot connect to the Firebase database.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
+    setError(null);
+    
     try {
+      // Get a reference to the plants collection
+      const plantsRef: DatabaseReference = ref(database, 'plants');
+      
       // Push data to Firebase
-      await push(ref(database, 'plants'), {
+      await push(plantsRef, {
         name: data.name,
         plantingDate: data.plantingDate,
-        growthDuration: data.growthDuration, // Already a number thanks to schema
+        growthDuration: data.growthDuration,
         cropType: data.cropType,
         createdAt: Date.now()
       });
@@ -70,11 +87,13 @@ export const AddPlant = ({ database, toast }: AddPlantProps) => {
       form.reset({
         name: '',
         plantingDate: new Date().toISOString().split('T')[0],
-        growthDuration: 90, // Now using a number instead of string
+        growthDuration: 90,
         cropType: '',
       });
     } catch (error) {
       console.error("Error adding plant:", error);
+      setError(`Failed to add plant: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
       toast({
         title: "Error",
         description: "Failed to add plant. Please try again.",
@@ -88,6 +107,12 @@ export const AddPlant = ({ database, toast }: AddPlantProps) => {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Add New Plant</h1>
+      
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          <p>{error}</p>
+        </div>
+      )}
       
       <Card>
         <CardHeader>
@@ -180,8 +205,15 @@ export const AddPlant = ({ database, toast }: AddPlantProps) => {
                 )}
               />
               
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Adding..." : "Add Plant"}
+              <Button type="submit" disabled={isSubmitting} className="w-full">
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  "Add Plant"
+                )}
               </Button>
             </form>
           </Form>
