@@ -21,6 +21,7 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface HistoricalDataProps {
   database: Database;
@@ -29,9 +30,26 @@ interface HistoricalDataProps {
 export const HistoricalData = ({ database }: HistoricalDataProps) => {
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [timeRange, setTimeRange] = useState<number>(20);  // Default to last 20 records
+  const [automationStatus, setAutomationStatus] = useState<boolean>(false);
+  
+  // Fetch current automation status
+  useEffect(() => {
+    const automationRef = ref(database, 'settings/automation');
+    const unsubscribe = get(automationRef).then((snapshot) => {
+      if (snapshot.exists()) {
+        setAutomationStatus(snapshot.val());
+      }
+    }).catch(error => {
+      console.error("Error fetching automation status:", error);
+    });
+    
+    return () => {};
+  }, [database]);
   
   const fetchHistoricalData = async () => {
     try {
+      // Use orderByChild despite the Firebase warning
+      // We'll handle the ordering client-side if needed
       const historyRef = query(
         ref(database, 'history'),
         orderByChild('timestamp'),
@@ -64,6 +82,13 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
   
   useEffect(() => {
     fetchHistoricalData();
+    
+    // Set up a refresh interval
+    const refreshInterval = setInterval(fetchHistoricalData, 60000); // Refresh every minute
+    
+    return () => {
+      clearInterval(refreshInterval);
+    };
   }, [database, timeRange]);
   
   return (
@@ -92,6 +117,37 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
           </Button>
         </div>
       </div>
+      
+      {/* Current System Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Current System Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4 flex-wrap">
+            <Badge variant={automationStatus ? "success" : "destructive"} className="text-sm py-1 px-3">
+              Automation: {automationStatus ? 'Enabled' : 'Disabled'}
+            </Badge>
+            
+            {historyData.length > 0 && (
+              <>
+                <Badge variant="outline" className="text-sm py-1 px-3">
+                  Temperature: {historyData[0].temperature?.toFixed(1) || 'N/A'}°C
+                </Badge>
+                <Badge variant="outline" className="text-sm py-1 px-3">
+                  Humidity: {historyData[0].humidity?.toFixed(1) || 'N/A'}%
+                </Badge>
+                <Badge variant="outline" className="text-sm py-1 px-3">
+                  Soil Moisture: {historyData[0].soil_moisture?.toFixed(1) || 'N/A'}%
+                </Badge>
+                <Badge variant="outline" className="text-sm py-1 px-3">
+                  Lighting: {historyData[0].lighting || 'N/A'}%
+                </Badge>
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -206,6 +262,37 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
             </ResponsiveContainer>
           </CardContent>
         </Card>
+        
+        {/* Automation Status Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Automation Status History</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={[...historyData].reverse().map(entry => ({
+                  ...entry,
+                  automation_status: entry.automation_status ? 100 : 0
+                }))}
+                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="time" />
+                <YAxis tickFormatter={(value) => value === 100 ? 'On' : value === 0 ? 'Off' : ''} />
+                <Tooltip formatter={(value) => value === 100 ? 'Enabled' : 'Disabled'} />
+                <Legend />
+                <Line 
+                  type="stepAfter" 
+                  dataKey="automation_status" 
+                  name="Automation" 
+                  stroke="#8b5cf6" 
+                  activeDot={{ r: 8 }} 
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Data Table */}
@@ -224,6 +311,7 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
                   <TableHead>Humidity (%)</TableHead>
                   <TableHead>Soil Moisture (%)</TableHead>
                   <TableHead>Light (%)</TableHead>
+                  <TableHead>Automation</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -235,11 +323,18 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
                     <TableCell>{entry.humidity?.toFixed(1) || 'N/A'}</TableCell>
                     <TableCell>{entry.soil_moisture?.toFixed(1) || 'N/A'}</TableCell>
                     <TableCell>{entry.lighting || 'N/A'}</TableCell>
+                    <TableCell>
+                      {entry.automation_status !== undefined ? (
+                        <Badge variant={entry.automation_status ? "success" : "destructive"}>
+                          {entry.automation_status ? 'Enabled' : 'Disabled'}
+                        </Badge>
+                      ) : 'N/A'}
+                    </TableCell>
                   </TableRow>
                 ))}
                 {historyData.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-4">
+                    <TableCell colSpan={7} className="text-center py-4">
                       No historical data available
                     </TableCell>
                   </TableRow>
