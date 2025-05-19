@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { ref, onValue, set, get } from 'firebase/database';
 import { 
@@ -105,7 +106,7 @@ const Index = () => {
       unsubscribeActuator();
       unsubscribeAutomation();
     };
-  }, [database]);
+  }, []);
 
   // Tab icons mapping
   const tabIcons = {
