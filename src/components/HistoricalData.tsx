@@ -125,7 +125,7 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-4 flex-wrap">
-            <Badge variant={automationStatus ? "success" : "destructive"} className="text-sm py-1 px-3">
+            <Badge variant={automationStatus ? "default" : "destructive"} className="text-sm py-1 px-3">
               Automation: {automationStatus ? 'Enabled' : 'Disabled'}
             </Badge>
             
@@ -325,7 +325,7 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
                     <TableCell>{entry.lighting || 'N/A'}</TableCell>
                     <TableCell>
                       {entry.automation_status !== undefined ? (
-                        <Badge variant={entry.automation_status ? "success" : "destructive"}>
+                        <Badge variant={entry.automation_status ? "default" : "destructive"}>
                           {entry.automation_status ? 'Enabled' : 'Disabled'}
                         </Badge>
                       ) : 'N/A'}
