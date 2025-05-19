@@ -1,12 +1,11 @@
-
 import React, { useEffect, useState } from 'react';
 import { Database, ref, onValue, get, query, orderByChild, limitToLast } from 'firebase/database';
 import { 
   Thermometer, 
   Droplet, 
   Sun, 
-  Fan, 
-  Pump
+  Fan,
+  Droplet as Pump
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -133,8 +132,7 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
             </p>
             <Progress 
               value={sensorData.temperature * 2} 
-              className="h-2 mt-2" 
-              indicatorClassName={getSensorColor('temperature', sensorData.temperature).replace('text-', 'bg-')}
+              className={`h-2 mt-2 ${getSensorColor('temperature', sensorData.temperature).replace('text-', 'bg-')}`}
             />
           </CardContent>
         </Card>
@@ -153,8 +151,7 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
             </p>
             <Progress 
               value={sensorData.humidity} 
-              className="h-2 mt-2" 
-              indicatorClassName={getSensorColor('humidity', sensorData.humidity).replace('text-', 'bg-')}
+              className={`h-2 mt-2 ${getSensorColor('humidity', sensorData.humidity).replace('text-', 'bg-')}`}
             />
           </CardContent>
         </Card>
@@ -173,8 +170,7 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
             </p>
             <Progress 
               value={sensorData.soil_moisture} 
-              className="h-2 mt-2" 
-              indicatorClassName={getSensorColor('soil_moisture', sensorData.soil_moisture).replace('text-', 'bg-')}
+              className={`h-2 mt-2 ${getSensorColor('soil_moisture', sensorData.soil_moisture).replace('text-', 'bg-')}`}
             />
           </CardContent>
         </Card>
@@ -193,8 +189,7 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
             </p>
             <Progress 
               value={sensorData.lighting} 
-              className="h-2 mt-2" 
-              indicatorClassName={getSensorColor('lighting', sensorData.lighting).replace('text-', 'bg-')}
+              className={`h-2 mt-2 ${getSensorColor('lighting', sensorData.lighting).replace('text-', 'bg-')}`}
             />
           </CardContent>
         </Card>

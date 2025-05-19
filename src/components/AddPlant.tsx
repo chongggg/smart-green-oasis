@@ -43,7 +43,7 @@ export const AddPlant = ({ database, toast }: AddPlantProps) => {
     defaultValues: {
       name: '',
       plantingDate: new Date().toISOString().split('T')[0], // Today's date as default
-      growthDuration: '90',
+      growthDuration: '90', // Using string as per the schema definition
       cropType: '',
     },
   });
@@ -55,7 +55,7 @@ export const AddPlant = ({ database, toast }: AddPlantProps) => {
       await push(ref(database, 'plants'), {
         name: data.name,
         plantingDate: data.plantingDate,
-        growthDuration: parseInt(data.growthDuration.toString()),
+        growthDuration: parseInt(data.growthDuration.toString()), // Ensure it's a number
         cropType: data.cropType,
         createdAt: Date.now()
       });
@@ -70,7 +70,7 @@ export const AddPlant = ({ database, toast }: AddPlantProps) => {
       form.reset({
         name: '',
         plantingDate: new Date().toISOString().split('T')[0],
-        growthDuration: '90',
+        growthDuration: '90', // Using string as per the schema definition
         cropType: '',
       });
     } catch (error) {
