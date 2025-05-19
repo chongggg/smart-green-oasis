@@ -5,13 +5,14 @@ import {
   Thermometer, 
   Droplet, 
   Sun, 
-  Fan, 
+  Fan,
   Leaf,
   Settings,
   Calendar,
   History,
   Plus,
-  ChartLine
+  ChartLine,
+  Database
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,6 +28,7 @@ import { HistoricalData } from '@/components/HistoricalData';
 import { AddPlant } from '@/components/AddPlant';
 import { PlantList } from '@/components/PlantList';
 import { Settings as SettingsComponent } from '@/components/Settings';
+import { DataTable } from '@/components/DataTable';
 
 // Remove duplicate Firebase configuration and initialization since we're importing from firebase-config.ts
 
@@ -76,6 +78,15 @@ const Index = () => {
           soil_moisture: data.soil_moisture || 0,
           lighting: data.lighting || 0
         });
+        
+        // Also update actuator status if available in sensor_data
+        if (data.fan_status !== undefined || data.pump_status !== undefined || data.light_status !== undefined) {
+          setActuatorStatus({
+            fan: data.fan_status || false,
+            pump: data.pump_status || false,
+            light: data.light_status || false
+          });
+        }
       }
     });
 
@@ -115,7 +126,8 @@ const Index = () => {
     history: <History className="mr-2 h-4 w-4" />,
     addplant: <Plus className="mr-2 h-4 w-4" />,
     plantlist: <ChartLine className="mr-2 h-4 w-4" />,
-    settings: <Settings className="mr-2 h-4 w-4" />
+    settings: <Settings className="mr-2 h-4 w-4" />,
+    rawdata: <Database className="mr-2 h-4 w-4" />
   };
 
   return (
@@ -137,6 +149,7 @@ const Index = () => {
               { id: 'history', label: 'Historical Data' },
               { id: 'addplant', label: 'Add Plant' },
               { id: 'plantlist', label: 'Plant List' },
+              { id: 'rawdata', label: 'Raw Data' },
               { id: 'settings', label: 'Settings' }
             ].map((item) => (
               <Button
@@ -181,6 +194,18 @@ const Index = () => {
           
           {activeTab === 'plantlist' && (
             <PlantList database={database} toast={toast} />
+          )}
+          
+          {activeTab === 'rawdata' && (
+            <div className="space-y-6">
+              <h1 className="text-3xl font-bold">Raw Database Data</h1>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <DataTable database={database} path="sensor_data" />
+                <DataTable database={database} path="actuator_status" />
+                <DataTable database={database} path="settings" />
+                <DataTable database={database} path="history" />
+              </div>
+            </div>
           )}
           
           {activeTab === 'settings' && (
