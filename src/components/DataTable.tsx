@@ -23,7 +23,7 @@ export const DataTable = ({ database, path }: DataTableProps) => {
     try {
       const unsubscribe = onValue(dataRef, (snapshot) => {
         const rawData = snapshot.val();
-        console.log(`Data from ${path}:`, rawData); // Add logging to debug
+        console.log(`Data from ${path}:`, rawData); // Add logging for debugging
         setLoading(false);
         setData(rawData);
       }, (error) => {

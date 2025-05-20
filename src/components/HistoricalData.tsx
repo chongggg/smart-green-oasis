@@ -49,35 +49,66 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
     try {
       console.log("Fetching historical data with limit:", timeRange);
       
-      const historyRef = query(
-        ref(database, 'history'),
-        orderByChild('timestamp'),
-        limitToLast(timeRange)
-      );
+      // When using query with orderByChild and limitToLast, we need to ensure
+      // there's a proper index in Firebase rules. For now, we'll use a simpler approach.
+      const historyRef = ref(database, 'history');
       
       const snapshot = await get(historyRef);
       if (snapshot.exists()) {
         const data = snapshot.val();
         console.log("Raw history data:", data);
         
-        const formattedData = Object.keys(data).map(key => {
-          const entry = data[key];
-          const date = new Date(entry.timestamp);
-          return {
-            id: key,
-            ...entry,
-            formattedDate: date.toLocaleDateString(),
-            formattedTime: date.toLocaleTimeString(),
-            time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          };
-        });
-        
-        // Sort by timestamp (newest first)
-        formattedData.sort((a, b) => b.timestamp - a.timestamp);
-        console.log("Formatted history data:", formattedData);
-        setHistoryData(formattedData);
+        if (data) {
+          const formattedData = Object.keys(data).map(key => {
+            const entry = data[key];
+            const date = new Date(entry.timestamp || Date.now());
+            return {
+              id: key,
+              ...entry,
+              timestamp: entry.timestamp || Date.now(),
+              formattedDate: date.toLocaleDateString(),
+              formattedTime: date.toLocaleTimeString(),
+              time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              // Ensure all required fields exist
+              temperature: entry.temperature || 0,
+              humidity: entry.humidity || 0,
+              soil_moisture: entry.soil_moisture || 0,
+              lighting: entry.lighting || 0,
+              automation_status: entry.automation_status !== undefined ? entry.automation_status : automationStatus
+            };
+          });
+          
+          // Sort by timestamp (newest first) and limit to timeRange
+          formattedData.sort((a, b) => b.timestamp - a.timestamp);
+          const limitedData = formattedData.slice(0, timeRange);
+          
+          console.log("Formatted history data:", limitedData);
+          setHistoryData(limitedData);
+        } else {
+          console.log("History data is null or empty");
+          setHistoryData([]);
+        }
       } else {
         console.log("No historical data available");
+        setHistoryData([]);
+        
+        // Simulate data for testing if needed
+        // Uncomment this to create test data
+        /*
+        const testData = Array.from({ length: timeRange }, (_, i) => ({
+          id: `test-${i}`,
+          timestamp: Date.now() - (i * 60000),
+          formattedDate: new Date(Date.now() - (i * 60000)).toLocaleDateString(),
+          formattedTime: new Date(Date.now() - (i * 60000)).toLocaleTimeString(),
+          time: new Date(Date.now() - (i * 60000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          temperature: Math.random() * 10 + 20, // 20-30
+          humidity: Math.random() * 30 + 60, // 60-90
+          soil_moisture: Math.random() * 40 + 30, // 30-70
+          lighting: Math.random() * 50 + 20, // 20-70
+          automation_status: i % 3 === 0 ? false : true
+        }));
+        setHistoryData(testData);
+        */
       }
     } catch (error) {
       console.error("Error fetching historical data:", error);
