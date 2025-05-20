@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Database, ref, onValue, get, query, orderByChild, limitToLast } from 'firebase/database';
 import { 
@@ -145,8 +144,8 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
   };
 
   // Calendar day rendering with event indicators
-  const renderCalendarCell = (day: Date) => {
-    const formattedDate = format(day, 'yyyy-MM-dd');
+  const renderCalendarCell = (date: Date) => {
+    const formattedDate = format(date, 'yyyy-MM-dd');
     const todayEvents = calendarEvents.filter(event => 
       format(event.date, 'yyyy-MM-dd') === formattedDate
     );
@@ -156,7 +155,7 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
     
     return (
       <div className="relative w-full h-full flex items-center justify-center">
-        {day.getDate()}
+        {date.getDate()}
         <div className="absolute bottom-0 flex gap-1 justify-center">
           {hasPlantingEvent && (
             <div className="h-1 w-1 rounded-full bg-green-500"></div>
@@ -202,12 +201,11 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
                   selected={date}
                   onSelect={setDate}
                   className="rounded-md border shadow"
-                  components={{
-                    Day: ({ day, ...props }) => (
-                      <button {...props}>
-                        {renderCalendarCell(day)}
-                      </button>
-                    )
+                  modifiers={{
+                    eventDay: calendarEvents.map(event => event.date)
+                  }}
+                  modifiersStyles={{
+                    eventDay: { fontWeight: 'bold' }
                   }}
                 />
                 <div className="mt-4 flex items-center justify-center gap-4">
