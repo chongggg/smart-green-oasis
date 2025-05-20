@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Database, ref, query, orderByChild, get, limitToLast } from 'firebase/database';
+import { Database, ref, query, orderByChild, get, limitToLast, onValue } from 'firebase/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   Table, 
