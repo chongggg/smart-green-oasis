@@ -57,12 +57,36 @@ export const DataTable = ({ database, path }: DataTableProps) => {
       if (value > 1000000000000) { // Simple check for timestamp (milliseconds)
         return new Date(value).toLocaleString();
       }
-      return value.toString();
+      // Format numbers with 2 decimal places if they have decimals
+      return Number.isInteger(value) ? value.toString() : value.toFixed(2);
     }
     
     if (typeof value === 'object') {
+      if (Array.isArray(value)) {
+        return (
+          <div className="border p-2 rounded bg-muted/20 max-h-[200px] overflow-auto">
+            {value.length === 0 ? (
+              <span className="text-gray-400">Empty array</span>
+            ) : (
+              <div className="space-y-2">
+                {value.slice(0, 5).map((item, index) => (
+                  <div key={index} className="border-b pb-1 last:border-0">
+                    {renderValue(item)}
+                  </div>
+                ))}
+                {value.length > 5 && (
+                  <div className="text-xs text-muted-foreground">
+                    + {value.length - 5} more items
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      }
+      
       return (
-        <div className="border p-2 rounded bg-muted/20 max-h-[100px] overflow-auto">
+        <div className="border p-2 rounded bg-muted/20 max-h-[200px] overflow-auto">
           <pre className="text-xs">{JSON.stringify(value, null, 2)}</pre>
         </div>
       );

@@ -32,8 +32,9 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
   const [timeRange, setTimeRange] = useState<number>(20);  // Default to last 20 records
   const [automationStatus, setAutomationStatus] = useState<boolean>(false);
   
-  // Fetch current automation status
+  // Fetch current automation status and sensor data
   useEffect(() => {
+    // Get automation status
     const automationRef = ref(database, 'settings/automation');
     get(automationRef).then((snapshot) => {
       if (snapshot.exists()) {
@@ -43,16 +44,35 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
     }).catch(error => {
       console.error("Error fetching automation status:", error);
     });
+    
+    // Listen for sensor data updates to have the latest data
+    const sensorDataRef = ref(database, 'sensor_data');
+    const unsubscribeSensor = onValue(sensorDataRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const sensorData = snapshot.val();
+        console.log("Current sensor data:", sensorData);
+      }
+    });
+    
+    return () => {
+      unsubscribeSensor();
+    };
   }, [database]);
   
   const fetchHistoricalData = async () => {
     try {
       console.log("Fetching historical data with limit:", timeRange);
       
-      // When using query with orderByChild and limitToLast, we need to ensure
-      // there's a proper index in Firebase rules. For now, we'll use a simpler approach.
+      // Try to use sensor_data for current values and history for historical data
       const historyRef = ref(database, 'history');
+      const sensorDataRef = ref(database, 'sensor_data');
       
+      // Get current sensor data first to ensure we have the latest
+      const sensorSnapshot = await get(sensorDataRef);
+      const currentSensorData = sensorSnapshot.exists() ? sensorSnapshot.val() : null;
+      console.log("Current sensor data for history:", currentSensorData);
+      
+      // Then get historical data
       const snapshot = await get(historyRef);
       if (snapshot.exists()) {
         const data = snapshot.val();
@@ -61,20 +81,26 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
         if (data) {
           const formattedData = Object.keys(data).map(key => {
             const entry = data[key];
-            const date = new Date(entry.timestamp || Date.now());
+            const timestamp = entry.timestamp || Date.now();
+            const date = new Date(timestamp);
+            
+            // Use values from entry, or fall back to current sensor data if available
             return {
               id: key,
               ...entry,
-              timestamp: entry.timestamp || Date.now(),
+              timestamp: timestamp,
               formattedDate: date.toLocaleDateString(),
               formattedTime: date.toLocaleTimeString(),
               time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               // Ensure all required fields exist
-              temperature: entry.temperature || 0,
-              humidity: entry.humidity || 0,
-              soil_moisture: entry.soil_moisture || 0,
-              lighting: entry.lighting || 0,
-              automation_status: entry.automation_status !== undefined ? entry.automation_status : automationStatus
+              temperature: entry.temperature !== undefined ? entry.temperature : (currentSensorData?.temperature || 0),
+              humidity: entry.humidity !== undefined ? entry.humidity : (currentSensorData?.humidity || 0),
+              soil_moisture: entry.soil_moisture !== undefined ? entry.soil_moisture : (currentSensorData?.soil_moisture || 0),
+              lighting: entry.lighting !== undefined ? entry.lighting : (currentSensorData?.lighting || 0),
+              // For automation status, check entry first, then fan_status from sensor_data, then fall back to state
+              automation_status: entry.automation_status !== undefined 
+                ? entry.automation_status 
+                : (currentSensorData?.fan_status !== undefined ? currentSensorData.fan_status : automationStatus)
             };
           });
           
@@ -92,23 +118,24 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
         console.log("No historical data available");
         setHistoryData([]);
         
-        // Simulate data for testing if needed
-        // Uncomment this to create test data
-        /*
-        const testData = Array.from({ length: timeRange }, (_, i) => ({
-          id: `test-${i}`,
-          timestamp: Date.now() - (i * 60000),
-          formattedDate: new Date(Date.now() - (i * 60000)).toLocaleDateString(),
-          formattedTime: new Date(Date.now() - (i * 60000)).toLocaleTimeString(),
-          time: new Date(Date.now() - (i * 60000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          temperature: Math.random() * 10 + 20, // 20-30
-          humidity: Math.random() * 30 + 60, // 60-90
-          soil_moisture: Math.random() * 40 + 30, // 30-70
-          lighting: Math.random() * 50 + 20, // 20-70
-          automation_status: i % 3 === 0 ? false : true
-        }));
-        setHistoryData(testData);
-        */
+        // If we don't have historical data but have current sensor data, create a single entry
+        if (currentSensorData) {
+          console.log("Creating entry from current sensor data");
+          const now = Date.now();
+          const entry = {
+            id: 'current',
+            timestamp: now,
+            formattedDate: new Date(now).toLocaleDateString(),
+            formattedTime: new Date(now).toLocaleTimeString(),
+            time: new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            temperature: currentSensorData.temperature || 0,
+            humidity: currentSensorData.humidity || 0,
+            soil_moisture: currentSensorData.soil_moisture || 0,
+            lighting: currentSensorData.lighting || 0,
+            automation_status: currentSensorData.fan_status !== undefined ? currentSensorData.fan_status : automationStatus
+          };
+          setHistoryData([entry]);
+        }
       }
     } catch (error) {
       console.error("Error fetching historical data:", error);
@@ -176,7 +203,7 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
                   Soil Moisture: {historyData[0].soil_moisture?.toFixed(1) || 'N/A'}%
                 </Badge>
                 <Badge variant="outline" className="text-sm py-1 px-3">
-                  Lighting: {historyData[0].lighting || 'N/A'}%
+                  Lighting: {historyData[0].lighting?.toFixed(0) || 'N/A'}%
                 </Badge>
               </>
             )}
@@ -387,7 +414,7 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
                     <TableCell>{entry.temperature?.toFixed(1) || 'N/A'}</TableCell>
                     <TableCell>{entry.humidity?.toFixed(1) || 'N/A'}</TableCell>
                     <TableCell>{entry.soil_moisture?.toFixed(1) || 'N/A'}</TableCell>
-                    <TableCell>{entry.lighting || 'N/A'}</TableCell>
+                    <TableCell>{entry.lighting?.toFixed(0) || 'N/A'}</TableCell>
                     <TableCell>
                       {entry.automation_status !== undefined ? (
                         <Badge variant={entry.automation_status ? "default" : "destructive"}>

@@ -42,14 +42,10 @@ const Index = () => {
     temperature: 0,
     humidity: 0,
     soil_moisture: 0,
-    lighting: 0
-  });
-  
-  // Actuator status
-  const [actuatorStatus, setActuatorStatus] = useState({
-    fan: false,
-    pump: false,
-    light: false
+    lighting: 0,
+    fan_status: false,
+    pump_status: false,
+    light_status: false
   });
   
   // Automation status
@@ -76,29 +72,10 @@ const Index = () => {
           temperature: data.temperature || 0,
           humidity: data.humidity || 0,
           soil_moisture: data.soil_moisture || 0,
-          lighting: data.lighting || 0
-        });
-        
-        // Also update actuator status if available in sensor_data
-        if (data.fan_status !== undefined || data.pump_status !== undefined || data.light_status !== undefined) {
-          setActuatorStatus({
-            fan: data.fan_status || false,
-            pump: data.pump_status || false,
-            light: data.light_status || false
-          });
-        }
-      }
-    });
-
-    // Actuator status reference
-    const actuatorStatusRef = ref(database, 'actuator_status');
-    const unsubscribeActuator = onValue(actuatorStatusRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        setActuatorStatus({
-          fan: data.fan || false,
-          pump: data.pump || false,
-          light: data.light || false
+          lighting: data.lighting || 0,
+          fan_status: data.fan_status || false,
+          pump_status: data.pump_status || false,
+          light_status: data.light_status || false
         });
       }
     });
@@ -114,7 +91,6 @@ const Index = () => {
 
     return () => {
       unsubscribeSensor();
-      unsubscribeActuator();
       unsubscribeAutomation();
     };
   }, []);
@@ -170,7 +146,11 @@ const Index = () => {
           {activeTab === 'dashboard' && (
             <Dashboard 
               sensorData={sensorData} 
-              actuatorStatus={actuatorStatus} 
+              actuatorStatus={{
+                fan: sensorData.fan_status,
+                pump: sensorData.pump_status,
+                light: sensorData.light_status
+              }} 
               database={database}
             />
           )}
@@ -178,7 +158,11 @@ const Index = () => {
           {activeTab === 'controls' && (
             <Controls 
               automationEnabled={automationEnabled} 
-              actuatorStatus={actuatorStatus}
+              actuatorStatus={{
+                fan: sensorData.fan_status,
+                pump: sensorData.pump_status,
+                light: sensorData.light_status
+              }}
               database={database}
               toast={toast}
             />
@@ -201,8 +185,8 @@ const Index = () => {
               <h1 className="text-3xl font-bold">Raw Database Data</h1>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <DataTable database={database} path="sensor_data" />
-                <DataTable database={database} path="actuator_status" />
                 <DataTable database={database} path="settings" />
+                <DataTable database={database} path="plants" />
                 <DataTable database={database} path="history" />
               </div>
             </div>
