@@ -8,15 +8,23 @@ import {
   Fan,
   Droplet as Pump,
   CalendarDays,
-  CalendarCheck,
-  TreePalm,
-  Sprout
+  CalendarCheck
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Calendar } from '@/components/ui/calendar';
 import { format, addDays } from 'date-fns';
 import { Badge } from "@/components/ui/badge";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
 
 type SensorData = {
   temperature: number;
@@ -136,6 +144,31 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
     return Math.min(100, Math.round((age / duration) * 100));
   };
 
+  // Calendar day rendering with event indicators
+  const renderCalendarCell = (day: Date) => {
+    const formattedDate = format(day, 'yyyy-MM-dd');
+    const todayEvents = calendarEvents.filter(event => 
+      format(event.date, 'yyyy-MM-dd') === formattedDate
+    );
+    
+    const hasPlantingEvent = todayEvents.some(event => event.type === 'planting');
+    const hasHarvestEvent = todayEvents.some(event => event.type === 'harvest');
+    
+    return (
+      <div className="relative w-full h-full flex items-center justify-center">
+        {day.getDate()}
+        <div className="absolute bottom-0 flex gap-1 justify-center">
+          {hasPlantingEvent && (
+            <div className="h-1 w-1 rounded-full bg-green-500"></div>
+          )}
+          {hasHarvestEvent && (
+            <div className="h-1 w-1 rounded-full bg-amber-500"></div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Get events for selected date
   const getEventsForSelectedDate = () => {
     if (!date) return [];
@@ -169,11 +202,12 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
                   selected={date}
                   onSelect={setDate}
                   className="rounded-md border shadow"
-                  modifiers={{
-                    eventDay: calendarEvents.map(event => event.date)
-                  }}
-                  modifiersStyles={{
-                    eventDay: { fontWeight: 'bold' }
+                  components={{
+                    Day: ({ day, ...props }) => (
+                      <button {...props}>
+                        {renderCalendarCell(day)}
+                      </button>
+                    )
                   }}
                 />
                 <div className="mt-4 flex items-center justify-center gap-4">
@@ -199,9 +233,9 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
                           <span className="font-medium">{event.name}</span>
                           <Badge variant={event.type === 'planting' ? 'default' : 'secondary'}>
                             {event.type === 'planting' ? (
-                              <><Sprout className="h-3 w-3 mr-1" /> Planting Day</>
+                              <><CalendarDays className="h-3 w-3 mr-1" /> Planting Day</>
                             ) : (
-                              <><TreePalm className="h-3 w-3 mr-1" /> Harvest Day</>
+                              <><CalendarCheck className="h-3 w-3 mr-1" /> Harvest Day</>
                             )}
                           </Badge>
                         </div>
@@ -291,78 +325,98 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
         </Card>
       </div>
       
-      {/* Crop Section - Expanded to full width */}
-      <div className="grid grid-cols-1 gap-6">
+      {/* Crop and Performance Chart */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Crop Section */}
         <Card>
           <CardHeader>
-            <CardTitle>Crop Management</CardTitle>
+            <CardTitle>Selected Crop</CardTitle>
           </CardHeader>
           <CardContent>
             {plants.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Plant Selection */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Selected Crop</h3>
-                  <select
-                    className="w-full p-2 rounded border mb-4 bg-card text-card-foreground"
-                    value={selectedPlant?.id || ''}
-                    onChange={(e) => {
-                      const plant = plants.find(p => p.id === e.target.value);
-                      setSelectedPlant(plant);
-                    }}
-                  >
-                    {plants.map((plant) => (
-                      <option key={plant.id} value={plant.id}>
-                        {plant.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <>
+                <select
+                  className="w-full p-2 rounded border mb-4 bg-card text-card-foreground"
+                  value={selectedPlant?.id || ''}
+                  onChange={(e) => {
+                    const plant = plants.find(p => p.id === e.target.value);
+                    setSelectedPlant(plant);
+                  }}
+                >
+                  {plants.map((plant) => (
+                    <option key={plant.id} value={plant.id}>
+                      {plant.name}
+                    </option>
+                  ))}
+                </select>
                 
-                {/* Plant Details */}
                 {selectedPlant && (
-                  <div className="md:col-span-2">
-                    <h3 className="text-lg font-semibold mb-4">Crop Details</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-4">
-                        <div className="p-2 bg-primary/10 rounded font-medium">
-                          {selectedPlant.name} ({selectedPlant.cropType})
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground mb-1">Plant Age</p>
-                          <p className="font-bold">{calculatePlantAge(selectedPlant.plantingDate)} days</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground mb-1">Growth Progress</p>
-                          <Progress 
-                            value={calculateGrowthPercentage(selectedPlant.plantingDate, selectedPlant.growthDuration)} 
-                            className="h-2" 
-                          />
-                          <p className="text-xs mt-1 text-right">
-                            {calculateGrowthPercentage(selectedPlant.plantingDate, selectedPlant.growthDuration)}%
-                          </p>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Type:</span>
-                          <span className="font-medium">{selectedPlant.cropType}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Planted:</span>
-                          <span className="font-medium">{new Date(selectedPlant.plantingDate).toLocaleDateString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Expected Harvest:</span>
-                          <span className="font-medium">{new Date(new Date(selectedPlant.plantingDate).getTime() + selectedPlant.growthDuration * 24 * 60 * 60 * 1000).toLocaleDateString()}</span>
-                        </div>
-                      </div>
+                  <div className="space-y-4">
+                    <div className="p-2 bg-primary/10 rounded font-medium">
+                      {selectedPlant.name}
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">Plant Age</p>
+                      <p className="font-bold">{calculatePlantAge(selectedPlant.plantingDate)} days</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">Growth Progress</p>
+                      <Progress 
+                        value={calculateGrowthPercentage(selectedPlant.plantingDate, selectedPlant.growthDuration)} 
+                        className="h-2" 
+                      />
+                      <p className="text-xs mt-1 text-right">
+                        {calculateGrowthPercentage(selectedPlant.plantingDate, selectedPlant.growthDuration)}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Type: {selectedPlant.cropType}</p>
+                      <p className="text-sm text-muted-foreground">Planted: {new Date(selectedPlant.plantingDate).toLocaleDateString()}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Expected Harvest: {new Date(new Date(selectedPlant.plantingDate).getTime() + selectedPlant.growthDuration * 24 * 60 * 60 * 1000).toLocaleDateString()}
+                      </p>
                     </div>
                   </div>
                 )}
-              </div>
+              </>
             ) : (
               <p className="text-center text-muted-foreground">No crops added yet</p>
+            )}
+          </CardContent>
+        </Card>
+        
+        {/* Performance Chart */}
+        <Card className="col-span-1 md:col-span-2">
+          <CardHeader>
+            <CardTitle>Sensor Readings</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[300px]">
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={chartData}
+                  margin={{
+                    top: 5,
+                    right: 10,
+                    left: 10,
+                    bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="temperature" stroke="#ef4444" strokeWidth={2} />
+                  <Line type="monotone" dataKey="humidity" stroke="#3b82f6" strokeWidth={2} />
+                  <Line type="monotone" dataKey="soil_moisture" stroke="#10b981" strokeWidth={2} />
+                  <Line type="monotone" dataKey="lighting" stroke="#f59e0b" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-muted-foreground">No historical data available</p>
+              </div>
             )}
           </CardContent>
         </Card>
