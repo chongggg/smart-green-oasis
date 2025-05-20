@@ -35,21 +35,20 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
   // Fetch current automation status
   useEffect(() => {
     const automationRef = ref(database, 'settings/automation');
-    const unsubscribe = get(automationRef).then((snapshot) => {
+    get(automationRef).then((snapshot) => {
       if (snapshot.exists()) {
         setAutomationStatus(snapshot.val());
+        console.log("Automation status:", snapshot.val());
       }
     }).catch(error => {
       console.error("Error fetching automation status:", error);
     });
-    
-    return () => {};
   }, [database]);
   
   const fetchHistoricalData = async () => {
     try {
-      // Use orderByChild despite the Firebase warning
-      // We'll handle the ordering client-side if needed
+      console.log("Fetching historical data with limit:", timeRange);
+      
       const historyRef = query(
         ref(database, 'history'),
         orderByChild('timestamp'),
@@ -59,6 +58,8 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
       const snapshot = await get(historyRef);
       if (snapshot.exists()) {
         const data = snapshot.val();
+        console.log("Raw history data:", data);
+        
         const formattedData = Object.keys(data).map(key => {
           const entry = data[key];
           const date = new Date(entry.timestamp);
@@ -73,7 +74,10 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
         
         // Sort by timestamp (newest first)
         formattedData.sort((a, b) => b.timestamp - a.timestamp);
+        console.log("Formatted history data:", formattedData);
         setHistoryData(formattedData);
+      } else {
+        console.log("No historical data available");
       }
     } catch (error) {
       console.error("Error fetching historical data:", error);
@@ -157,25 +161,31 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
             <CardTitle>Temperature History</CardTitle>
           </CardHeader>
           <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={[...historyData].reverse()}
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="time" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="temperature" 
-                  name="Temperature (°C)"
-                  stroke="#ef4444" 
-                  activeDot={{ r: 8 }} 
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {historyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={[...historyData].reverse()}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line 
+                    type="monotone" 
+                    dataKey="temperature" 
+                    name="Temperature (°C)"
+                    stroke="#ef4444" 
+                    activeDot={{ r: 8 }} 
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-muted-foreground">No temperature data available</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -185,25 +195,31 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
             <CardTitle>Humidity History</CardTitle>
           </CardHeader>
           <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={[...historyData].reverse()}
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="time" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="humidity" 
-                  name="Humidity (%)" 
-                  stroke="#3b82f6" 
-                  activeDot={{ r: 8 }} 
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {historyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={[...historyData].reverse()}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line 
+                    type="monotone" 
+                    dataKey="humidity" 
+                    name="Humidity (%)" 
+                    stroke="#3b82f6" 
+                    activeDot={{ r: 8 }} 
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-muted-foreground">No humidity data available</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -213,25 +229,31 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
             <CardTitle>Soil Moisture History</CardTitle>
           </CardHeader>
           <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={[...historyData].reverse()}
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="time" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="soil_moisture" 
-                  name="Soil Moisture (%)" 
-                  stroke="#10b981" 
-                  activeDot={{ r: 8 }} 
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {historyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={[...historyData].reverse()}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line 
+                    type="monotone" 
+                    dataKey="soil_moisture" 
+                    name="Soil Moisture (%)" 
+                    stroke="#10b981" 
+                    activeDot={{ r: 8 }} 
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-muted-foreground">No soil moisture data available</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -241,25 +263,31 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
             <CardTitle>Light Level History</CardTitle>
           </CardHeader>
           <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={[...historyData].reverse()}
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="time" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="lighting" 
-                  name="Light Level (%)" 
-                  stroke="#f59e0b" 
-                  activeDot={{ r: 8 }} 
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {historyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={[...historyData].reverse()}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line 
+                    type="monotone" 
+                    dataKey="lighting" 
+                    name="Light Level (%)" 
+                    stroke="#f59e0b" 
+                    activeDot={{ r: 8 }} 
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-muted-foreground">No light level data available</p>
+              </div>
+            )}
           </CardContent>
         </Card>
         
@@ -269,28 +297,34 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
             <CardTitle>Automation Status History</CardTitle>
           </CardHeader>
           <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={[...historyData].reverse().map(entry => ({
-                  ...entry,
-                  automation_status: entry.automation_status ? 100 : 0
-                }))}
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="time" />
-                <YAxis tickFormatter={(value) => value === 100 ? 'On' : value === 0 ? 'Off' : ''} />
-                <Tooltip formatter={(value) => value === 100 ? 'Enabled' : 'Disabled'} />
-                <Legend />
-                <Line 
-                  type="stepAfter" 
-                  dataKey="automation_status" 
-                  name="Automation" 
-                  stroke="#8b5cf6" 
-                  activeDot={{ r: 8 }} 
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {historyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={[...historyData].reverse().map(entry => ({
+                    ...entry,
+                    automation_status: entry.automation_status ? 100 : 0
+                  }))}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" />
+                  <YAxis tickFormatter={(value) => value === 100 ? 'On' : value === 0 ? 'Off' : ''} />
+                  <Tooltip formatter={(value) => value === 100 ? 'Enabled' : 'Disabled'} />
+                  <Legend />
+                  <Line 
+                    type="stepAfter" 
+                    dataKey="automation_status" 
+                    name="Automation" 
+                    stroke="#8b5cf6" 
+                    activeDot={{ r: 8 }} 
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-muted-foreground">No automation status data available</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -315,7 +349,7 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {historyData.map((entry) => (
+                {historyData.length > 0 ? historyData.map((entry) => (
                   <TableRow key={entry.id}>
                     <TableCell>{entry.formattedDate}</TableCell>
                     <TableCell>{entry.formattedTime}</TableCell>
@@ -331,8 +365,7 @@ export const HistoricalData = ({ database }: HistoricalDataProps) => {
                       ) : 'N/A'}
                     </TableCell>
                   </TableRow>
-                ))}
-                {historyData.length === 0 && (
+                )) : (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-4">
                       No historical data available

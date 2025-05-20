@@ -23,6 +23,7 @@ export const DataTable = ({ database, path }: DataTableProps) => {
     try {
       const unsubscribe = onValue(dataRef, (snapshot) => {
         const rawData = snapshot.val();
+        console.log(`Data from ${path}:`, rawData); // Add logging to debug
         setLoading(false);
         setData(rawData);
       }, (error) => {
@@ -107,7 +108,7 @@ export const DataTable = ({ database, path }: DataTableProps) => {
           <div className="py-10 text-center text-red-500">Error: {error}</div>
         ) : data === null ? (
           <div className="py-10 text-center">No data available</div>
-        ) : typeof data === 'object' ? (
+        ) : typeof data === 'object' && data !== null ? (
           renderKeyValueTable(data)
         ) : (
           <div className="py-4">{renderValue(data)}</div>
