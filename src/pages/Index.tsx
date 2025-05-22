@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { ref, onValue } from 'firebase/database';
 import { 
@@ -98,13 +97,13 @@ const Index = () => {
   };
 
   return (
-    <div className={`min-h-screen ${isDarkMode ? 'dark' : ''} leaf-pattern`}>
+    <div className={`min-h-screen ${isDarkMode ? 'dark' : ''}`}>
       <div className="flex flex-col md:flex-row h-screen">
         {/* Sidebar */}
         <div className="w-full md:w-64 bg-sidebar p-5 md:h-screen shrink-0 border-r">
           <div className="flex items-center gap-2">
             <Sprout className="h-6 w-6 text-emerald-500" />
-            <h1 className="text-2xl font-bold">GreenOasis</h1>
+            <h1 className="text-2xl font-bold">Greenhouse</h1>
           </div>
           
           <Separator className="my-4" />
