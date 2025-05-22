@@ -71,6 +71,7 @@ void readSensors();
 void controlDevices();
 void sendToFirebase();
 void checkFirebaseCommands();
+void checkThresholdUpdates();
 
 unsigned long dataMillis = 0;
 bool signupOK = false;
@@ -138,6 +139,7 @@ void loop() {
     dataMillis = millis();
     
     readSensors();
+    checkThresholdUpdates(); // Check for threshold updates
     checkFirebaseCommands();
     if (automation_enabled) {
       controlDevices();
@@ -219,10 +221,15 @@ void sendToFirebase() {
     Firebase.RTDB.setInt(&fbdo, "sensor_data/lighting", light);
 
     // Send actuator status
-    Firebase.RTDB.setBool(&fbdo, "actuator_status/fan", fan_status);
-    Firebase.RTDB.setBool(&fbdo, "actuator_status/pump", pump_status);
-    Firebase.RTDB.setBool(&fbdo, "actuator_status/light", light_status);
+    Firebase.RTDB.setBool(&fbdo, "sensor_data/fan_status", fan_status);
+    Firebase.RTDB.setBool(&fbdo, "sensor_data/pump_status", pump_status);
+    Firebase.RTDB.setBool(&fbdo, "sensor_data/light_status", light_status);
     Firebase.RTDB.setBool(&fbdo, "settings/automation", automation_enabled);
+
+    // Send current thresholds (for UI display)
+    Firebase.RTDB.setInt(&fbdo, "settings/thresholds/current/temperature", temp_thresh);
+    Firebase.RTDB.setInt(&fbdo, "settings/thresholds/current/moisture", moist_thresh);
+    Firebase.RTDB.setInt(&fbdo, "settings/thresholds/current/light", lum_thresh);
 
     // Log timestamp
     Firebase.RTDB.setString(&fbdo, "system/last_update", String(millis()));
@@ -280,6 +287,44 @@ void checkFirebaseCommands() {
           digitalWrite(GREEN_LED, should_be_on ? HIGH : LOW);
           light_status = should_be_on;
           leds_ON = should_be_on;
+        }
+      }
+    }
+  }
+}
+
+// New function to check and update thresholds from Firebase
+void checkThresholdUpdates() {
+  if (Firebase.ready() && signupOK) {
+    // Check temperature threshold
+    if (Firebase.RTDB.getInt(&fbdo, "system_thresholds/temp_thresh")) {
+      if (fbdo.dataType() == "int" || fbdo.dataType() == "float") {
+        int new_temp_thresh = fbdo.intData();
+        if (new_temp_thresh > 0 && new_temp_thresh <= 40 && new_temp_thresh != temp_thresh) {
+          temp_thresh = new_temp_thresh;
+          Serial.println("Temperature threshold updated to: " + String(temp_thresh));
+        }
+      }
+    }
+    
+    // Check moisture threshold
+    if (Firebase.RTDB.getInt(&fbdo, "system_thresholds/moist_thresh")) {
+      if (fbdo.dataType() == "int" || fbdo.dataType() == "float") {
+        int new_moist_thresh = fbdo.intData();
+        if (new_moist_thresh > 0 && new_moist_thresh <= 100 && new_moist_thresh != moist_thresh) {
+          moist_thresh = new_moist_thresh;
+          Serial.println("Moisture threshold updated to: " + String(moist_thresh));
+        }
+      }
+    }
+    
+    // Check light threshold
+    if (Firebase.RTDB.getInt(&fbdo, "system_thresholds/lum_thresh")) {
+      if (fbdo.dataType() == "int" || fbdo.dataType() == "float") {
+        int new_lum_thresh = fbdo.intData();
+        if (new_lum_thresh > 0 && new_lum_thresh <= 100 && new_lum_thresh != lum_thresh) {
+          lum_thresh = new_lum_thresh;
+          Serial.println("Light threshold updated to: " + String(lum_thresh));
         }
       }
     }
