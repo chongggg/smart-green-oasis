@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Database, ref, onValue, get, query, orderByChild, limitToLast } from 'firebase/database';
 import { 
@@ -5,20 +6,14 @@ import {
   Droplet, 
   Sun, 
   Fan,
-  Droplet as Pump
+  Droplet as Pump,
+  CalendarDays
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer
-} from 'recharts';
+import { Calendar } from '@/components/ui/calendar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 type SensorData = {
   temperature: number;
@@ -33,6 +28,13 @@ type ActuatorStatus = {
   light: boolean;
 };
 
+type PlantEvent = {
+  date: Date;
+  title: string;
+  type: 'planting' | 'harvest';
+  plantId: string;
+};
+
 interface DashboardProps {
   sensorData: SensorData;
   actuatorStatus: ActuatorStatus;
@@ -42,8 +44,9 @@ interface DashboardProps {
 export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardProps) => {
   const [selectedPlant, setSelectedPlant] = useState<any>(null);
   const [plants, setPlants] = useState<any[]>([]);
-  const [chartData, setChartData] = useState<any[]>([]);
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<PlantEvent[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [eventsForSelectedDate, setEventsForSelectedDate] = useState<PlantEvent[]>([]);
   
   // Fetch plants data
   useEffect(() => {
@@ -61,30 +64,50 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
         if (plantsArray.length > 0 && !selectedPlant) {
           setSelectedPlant(plantsArray[0]);
         }
+
+        // Create events for planting and harvest dates
+        const plantEvents: PlantEvent[] = [];
+        plantsArray.forEach(plant => {
+          // Add planting date event
+          const plantingDate = new Date(plant.plantingDate);
+          plantEvents.push({
+            date: plantingDate,
+            title: `${plant.name} planted`,
+            type: 'planting',
+            plantId: plant.id
+          });
+          
+          // Calculate and add harvest date event
+          const harvestDate = new Date(plantingDate);
+          harvestDate.setDate(harvestDate.getDate() + plant.growthDuration);
+          plantEvents.push({
+            date: harvestDate,
+            title: `${plant.name} harvest`,
+            type: 'harvest',
+            plantId: plant.id
+          });
+        });
+        
+        setEvents(plantEvents);
       }
     });
     
     return () => unsubscribe();
   }, [database, selectedPlant]);
-  
-  // Fetch historical data for chart
+
+  // Update events for selected date when date changes
   useEffect(() => {
-    const historyRef = query(ref(database, 'history'), orderByChild('timestamp'), limitToLast(10));
-    const unsubscribe = onValue(historyRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const historyArray = Object.keys(data).map(key => ({
-          id: key,
-          ...data[key],
-          // Convert timestamp to readable time
-          time: new Date(data[key].timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }));
-        setChartData(historyArray);
-      }
-    });
-    
-    return () => unsubscribe();
-  }, [database]);
+    if (selectedDate) {
+      const dateEvents = events.filter(event => 
+        event.date.getDate() === selectedDate.getDate() &&
+        event.date.getMonth() === selectedDate.getMonth() &&
+        event.date.getFullYear() === selectedDate.getFullYear()
+      );
+      setEventsForSelectedDate(dateEvents);
+    } else {
+      setEventsForSelectedDate([]);
+    }
+  }, [selectedDate, events]);
 
   const getSensorColor = (type: string, value: number) => {
     switch (type) {
@@ -110,6 +133,37 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
   const calculateGrowthPercentage = (plantingDate: string, duration: number) => {
     const age = calculatePlantAge(plantingDate);
     return Math.min(100, Math.round((age / duration) * 100));
+  };
+
+  // Function to determine if a date has events
+  const hasEventOnDate = (date: Date) => {
+    return events.some(event => 
+      event.date.getDate() === date.getDate() &&
+      event.date.getMonth() === date.getMonth() &&
+      event.date.getFullYear() === date.getFullYear()
+    );
+  };
+
+  // Calendar modifiers for styling dates with events
+  const modifiers = {
+    planting: events
+      .filter(event => event.type === 'planting')
+      .map(event => new Date(event.date)),
+    harvest: events
+      .filter(event => event.type === 'harvest')
+      .map(event => new Date(event.date)),
+  };
+
+  // Modifier styles for the calendar
+  const modifiersStyles = {
+    planting: {
+      color: 'white',
+      backgroundColor: '#10b981', // Green for planting
+    },
+    harvest: {
+      color: 'white', 
+      backgroundColor: '#f59e0b', // Amber for harvest
+    },
   };
 
   return (
@@ -215,7 +269,7 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
             <CardTitle className="text-sm font-medium">Water Pump Status</CardTitle>
           </CardHeader>
           <CardContent className="flex justify-between items-center">
-            <Droplet className={`h-8 w-8 ${actuatorStatus.pump ? "text-blue-500" : "text-gray-400"}`} />
+            <Pump className={`h-8 w-8 ${actuatorStatus.pump ? "text-blue-500" : "text-gray-400"}`} />
             <span className={`font-bold ${actuatorStatus.pump ? "text-blue-500" : "text-gray-400"}`}>
               {actuatorStatus.pump ? "ON" : "OFF"}
             </span>
@@ -235,7 +289,7 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
         </Card>
       </div>
       
-      {/* Crop, Performance, Calendar */}
+      {/* Crop, Calendar */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
         {/* Crop Section */}
         <Card>
@@ -295,39 +349,64 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
           </CardContent>
         </Card>
         
-        {/* Performance Chart */}
+        {/* Calendar Section - replacing the sensor readings chart */}
         <Card className="col-span-1 md:col-span-2">
-          <CardHeader>
-            <CardTitle>Sensor Readings</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Crop Calendar</CardTitle>
+            <CalendarDays className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
-          <CardContent className="h-[300px]">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={chartData}
-                  margin={{
-                    top: 5,
-                    right: 10,
-                    left: 10,
-                    bottom: 5,
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="time" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="temperature" stroke="#ef4444" strokeWidth={2} />
-                  <Line type="monotone" dataKey="humidity" stroke="#3b82f6" strokeWidth={2} />
-                  <Line type="monotone" dataKey="soil_moisture" stroke="#10b981" strokeWidth={2} />
-                  <Line type="monotone" dataKey="lighting" stroke="#f59e0b" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <p className="text-muted-foreground">No historical data available</p>
+          <CardContent>
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={setSelectedDate}
+                  className="rounded-md border p-3 pointer-events-auto"
+                  modifiers={modifiers}
+                  modifiersStyles={modifiersStyles}
+                />
               </div>
-            )}
+              <div className="flex-1">
+                <div className="border rounded-md p-4 h-full">
+                  <h3 className="font-medium mb-4">
+                    {selectedDate ? selectedDate.toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    }) : 'Select a date'}
+                  </h3>
+                  
+                  <div className="space-y-2">
+                    {eventsForSelectedDate.length > 0 ? (
+                      eventsForSelectedDate.map((event, i) => (
+                        <div key={i} className="flex items-center gap-2 border-l-4 pl-2 py-1 rounded-sm"
+                          style={{ borderColor: event.type === 'planting' ? '#10b981' : '#f59e0b' }}>
+                          <Badge variant={event.type === 'planting' ? 'default' : 'secondary'}>
+                            {event.type === 'planting' ? 'Planting' : 'Harvest'}
+                          </Badge>
+                          <span>{event.title}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-muted-foreground">No events scheduled for this date</p>
+                    )}
+                  </div>
+                  
+                  <div className="mt-4 flex gap-2">
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                      <span className="text-xs">Planting</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+                      <span className="text-xs">Harvest</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
