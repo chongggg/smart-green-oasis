@@ -30,35 +30,60 @@ interface ControlsProps {
   toast: any;
 }
 
-// Define seasons with their recommended thresholds
+// Define seasons with their recommended thresholds - adjusted for Philippines which has mainly wet and dry seasons
 const seasonPresets = {
-  spring: {
-    name: 'Spring',
-    temperature: 28,
-    moisture: 30,
-    light: 25,
-    description: 'Mild temperatures, moderate watering, longer daylight hours'
-  },
-  summer: {
-    name: 'Summer',
+  dry: {
+    name: 'Dry Season',
     temperature: 32,
     moisture: 40,
     light: 15,
-    description: 'Higher temperatures, increased watering, natural sunlight'
+    description: 'Hot temperatures, increased watering, natural sunlight (March to May)'
   },
-  autumn: {
-    name: 'Autumn',
+  wet: {
+    name: 'Wet Season',
+    temperature: 28,
+    moisture: 30,
+    light: 30,
+    description: 'Humid weather, moderate watering, increased lighting (June to November)'
+  },
+  cool: {
+    name: 'Cool Dry Season',
     temperature: 26,
     moisture: 25,
-    light: 30,
-    description: 'Cooler temperatures, reduced watering, moderate lighting'
+    light: 25,
+    description: 'Cooler temperatures, reduced watering, moderate lighting (December to February)'
+  }
+};
+
+// Define crop types with their optimal settings
+const cropPresets = {
+  leafyVegetables: {
+    name: 'Leafy Vegetables',
+    temperature: 25,
+    moisture: 60,
+    light: 40,
+    description: 'Ideal for pechay, lettuce, kangkong, and mustard greens'
   },
-  winter: {
-    name: 'Winter',
+  fruitVegetables: {
+    name: 'Fruit Vegetables',
+    temperature: 30,
+    moisture: 50,
+    light: 60,
+    description: 'Optimal for tomatoes, eggplants, okra, and peppers'
+  },
+  rootCrops: {
+    name: 'Root Crops',
+    temperature: 28,
+    moisture: 45,
+    light: 30,
+    description: 'Best for carrots, radish, sweet potato, and ginger'
+  },
+  herbs: {
+    name: 'Herbs',
     temperature: 24,
-    moisture: 20,
-    light: 45,
-    description: 'Lowest temperatures, minimal watering, maximum artificial lighting'
+    moisture: 40,
+    light: 35,
+    description: 'Suitable for basil, mint, oregano, and rosemary'
   }
 };
 
@@ -75,30 +100,51 @@ export const Controls = ({
     light: 20
   });
   
-  // State for threshold mode (manual or season-based)
-  const [thresholdMode, setThresholdMode] = useState<'manual' | 'season'>('manual');
+  // State for threshold mode (manual, season-based, or crop-based)
+  const [thresholdMode, setThresholdMode] = useState<'manual' | 'season' | 'crop'>('manual');
   
-  // State for selected season
-  const [selectedSeason, setSelectedSeason] = useState<'spring' | 'summer' | 'autumn' | 'winter'>('summer');
+  // State for selected season and crop
+  const [selectedSeason, setSelectedSeason] = useState<'dry' | 'wet' | 'cool'>('wet');
+  const [selectedCrop, setSelectedCrop] = useState<'leafyVegetables' | 'fruitVegetables' | 'rootCrops' | 'herbs'>('leafyVegetables');
   
   // Fetch current thresholds on component mount
   useEffect(() => {
     const fetchThresholds = async () => {
       try {
-        const thresholdRef = ref(database, 'settings/thresholds');
-        const snapshot = await get(thresholdRef);
+        // Match the Firebase structure as described by the user
+        const tempRef = ref(database, 'settings/temp_threshold');
+        const moistRef = ref(database, 'settings/moisture_threshold');
+        const lightRef = ref(database, 'settings/light_threshold');
         
-        if (snapshot.exists()) {
-          const data = snapshot.val();
-          setThresholds({
-            temperature: data.temperature || 31,
-            moisture: data.moisture || 20,
-            light: data.light || 20
-          });
-          
-          // Also get threshold mode settings
-          setThresholdMode(data.mode || 'manual');
-          setSelectedSeason(data.season || 'summer');
+        const tempSnapshot = await get(tempRef);
+        const moistSnapshot = await get(moistRef);
+        const lightSnapshot = await get(lightRef);
+        
+        setThresholds({
+          temperature: tempSnapshot.exists() ? tempSnapshot.val() : 31,
+          moisture: moistSnapshot.exists() ? moistSnapshot.val() : 20,
+          light: lightSnapshot.exists() ? lightSnapshot.val() : 20
+        });
+        
+        // Also get threshold mode settings if they exist
+        const modeRef = ref(database, 'settings/threshold_mode');
+        const seasonRef = ref(database, 'settings/selected_season');
+        const cropRef = ref(database, 'settings/selected_crop');
+        
+        const modeSnapshot = await get(modeRef);
+        const seasonSnapshot = await get(seasonRef);
+        const cropSnapshot = await get(cropRef);
+        
+        if (modeSnapshot.exists()) {
+          setThresholdMode(modeSnapshot.val() || 'manual');
+        }
+        
+        if (seasonSnapshot.exists()) {
+          setSelectedSeason(seasonSnapshot.val() || 'wet');
+        }
+        
+        if (cropSnapshot.exists()) {
+          setSelectedCrop(cropSnapshot.val() || 'leafyVegetables');
         }
       } catch (error) {
         console.error("Error fetching thresholds:", error);
@@ -127,7 +173,7 @@ export const Controls = ({
   
   const toggleDevice = async (device: string, currentState: boolean) => {
     try {
-      await set(ref(database, `manual_control/${device}`), !currentState);
+      await set(ref(database, `actuator_status/${device}`), !currentState);
       toast({
         title: `${device.charAt(0).toUpperCase() + device.slice(1)} ${!currentState ? 'activated' : 'deactivated'}`,
         description: `The ${device} has been turned ${!currentState ? 'on' : 'off'}.`
@@ -145,7 +191,7 @@ export const Controls = ({
   // Update threshold values in Firebase
   const updateThresholds = async () => {
     try {
-      // If season-based, use the selected season's values
+      // If season-based or crop-based, use the selected preset values
       let updatedThresholds = thresholds;
       
       if (thresholdMode === 'season') {
@@ -154,21 +200,28 @@ export const Controls = ({
           moisture: seasonPresets[selectedSeason].moisture,
           light: seasonPresets[selectedSeason].light
         };
+      } else if (thresholdMode === 'crop') {
+        updatedThresholds = {
+          temperature: cropPresets[selectedCrop].temperature,
+          moisture: cropPresets[selectedCrop].moisture,
+          light: cropPresets[selectedCrop].light
+        };
       }
       
-      // Update threshold values
-      await set(ref(database, 'settings/thresholds'), {
-        ...updatedThresholds,
-        mode: thresholdMode,
-        season: selectedSeason
-      });
+      // Update threshold values based on the Firebase structure
+      await set(ref(database, 'settings/temp_threshold'), updatedThresholds.temperature);
+      await set(ref(database, 'settings/moisture_threshold'), updatedThresholds.moisture);
+      await set(ref(database, 'settings/light_threshold'), updatedThresholds.light);
       
-      // Also update ESP32 thresholds for real-time control
-      await set(ref(database, 'system_thresholds'), {
-        temp_thresh: updatedThresholds.temperature,
-        moist_thresh: updatedThresholds.moisture,
-        lum_thresh: updatedThresholds.light,
-      });
+      // Also save the mode and selected preset
+      await set(ref(database, 'settings/threshold_mode'), thresholdMode);
+      await set(ref(database, 'settings/selected_season'), selectedSeason);
+      await set(ref(database, 'settings/selected_crop'), selectedCrop);
+      
+      // Update ESP32 thresholds for real-time control
+      await set(ref(database, 'system_thresholds/temp_thresh'), updatedThresholds.temperature);
+      await set(ref(database, 'system_thresholds/moist_thresh'), updatedThresholds.moisture);
+      await set(ref(database, 'system_thresholds/lum_thresh'), updatedThresholds.light);
       
       toast({
         title: "Thresholds updated",
@@ -185,8 +238,13 @@ export const Controls = ({
   };
   
   // Handle season change
-  const handleSeasonChange = (season: 'spring' | 'summer' | 'autumn' | 'winter') => {
+  const handleSeasonChange = (season: 'dry' | 'wet' | 'cool') => {
     setSelectedSeason(season);
+  };
+  
+  // Handle crop change
+  const handleCropChange = (crop: 'leafyVegetables' | 'fruitVegetables' | 'rootCrops' | 'herbs') => {
+    setSelectedCrop(crop);
   };
   
   // Handle threshold input change
@@ -247,10 +305,11 @@ export const Controls = ({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue={thresholdMode} onValueChange={(value) => setThresholdMode(value as 'manual' | 'season')}>
+          <Tabs defaultValue={thresholdMode} onValueChange={(value) => setThresholdMode(value as 'manual' | 'season' | 'crop')}>
             <TabsList className="mb-4">
               <TabsTrigger value="manual">Manual Control</TabsTrigger>
               <TabsTrigger value="season">Season Adaptive</TabsTrigger>
+              <TabsTrigger value="crop">Crop Specific</TabsTrigger>
             </TabsList>
             
             <TabsContent value="manual" className="space-y-4">
@@ -331,14 +390,14 @@ export const Controls = ({
               <div className="flex mb-4 items-center gap-2">
                 <Cloud className="text-blue-500" />
                 <p className="text-sm">
-                  Select a seasonal preset that automatically configures optimal thresholds
+                  Select a seasonal preset optimized for Philippines climate
                 </p>
               </div>
               
               <RadioGroup
                 value={selectedSeason}
-                onValueChange={(value) => handleSeasonChange(value as 'spring' | 'summer' | 'autumn' | 'winter')}
-                className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                onValueChange={(value) => handleSeasonChange(value as 'dry' | 'wet' | 'cool')}
+                className="grid grid-cols-1 md:grid-cols-3 gap-4"
               >
                 {Object.entries(seasonPresets).map(([season, preset]) => (
                   <div key={season} className="relative">
@@ -383,6 +442,65 @@ export const Controls = ({
                 className="w-full mt-4"
               >
                 Apply Seasonal Thresholds
+              </Button>
+            </TabsContent>
+            
+            <TabsContent value="crop" className="space-y-4">
+              <div className="flex mb-4 items-center gap-2">
+                <Droplet className="text-green-500" />
+                <p className="text-sm">
+                  Select crop-specific settings for optimal growth
+                </p>
+              </div>
+              
+              <RadioGroup
+                value={selectedCrop}
+                onValueChange={(value) => handleCropChange(value as 'leafyVegetables' | 'fruitVegetables' | 'rootCrops' | 'herbs')}
+                className="grid grid-cols-1 md:grid-cols-2 gap-4"
+              >
+                {Object.entries(cropPresets).map(([crop, preset]) => (
+                  <div key={crop} className="relative">
+                    <RadioGroupItem
+                      value={crop}
+                      id={crop}
+                      className="absolute top-4 left-4 z-10"
+                    />
+                    <Label
+                      htmlFor={crop}
+                      className={`flex flex-col border p-4 rounded-md cursor-pointer transition-all ${
+                        selectedCrop === crop
+                          ? 'bg-accent border-primary'
+                          : 'hover:bg-accent/50'
+                      }`}
+                    >
+                      <span className="font-medium mb-1">{preset.name}</span>
+                      <span className="text-xs text-muted-foreground mb-3">
+                        {preset.description}
+                      </span>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="flex items-center gap-1">
+                          <Gauge size={14} className="text-red-500" />
+                          <span>{preset.temperature}°C</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Droplet size={14} className="text-blue-500" />
+                          <span>{preset.moisture}%</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Sun size={14} className="text-amber-500" />
+                          <span>{preset.light}%</span>
+                        </div>
+                      </div>
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+              
+              <Button 
+                onClick={updateThresholds} 
+                className="w-full mt-4"
+              >
+                Apply Crop-Specific Thresholds
               </Button>
             </TabsContent>
           </Tabs>

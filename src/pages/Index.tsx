@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { ref, onValue } from 'firebase/database';
 import { 
@@ -10,10 +11,16 @@ import {
   Sun,
   Thermometer,
   Droplet,
+  Gauge,
+  Server,
+  Wifi,
+  Clock,
+  Activity
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
+import { Badge } from '@/components/ui/badge';
 
 import { database } from '@/lib/firebase-config';
 import { Dashboard } from '@/components/Dashboard';
@@ -22,6 +29,7 @@ import { HistoricalData } from '@/components/HistoricalData';
 import { AddPlant } from '@/components/AddPlant';
 import { PlantList } from '@/components/PlantList';
 import { Settings as SettingsComponent } from '@/components/Settings';
+import { SystemInfo } from '@/components/SystemInfo';
 
 const Index = () => {
   const { toast } = useToast();
@@ -37,6 +45,24 @@ const Index = () => {
     fan_status: false,
     pump_status: false,
     light_status: false
+  });
+  
+  // Threshold values
+  const [thresholds, setThresholds] = useState({
+    temperature: 31,
+    moisture: 20,
+    light: 20,
+    mode: 'manual',
+    season: 'wet'
+  });
+  
+  // System information
+  const [systemInfo, setSystemInfo] = useState({
+    free_heap: 0,
+    last_update: '',
+    status: 'offline',
+    uptime: '',
+    wifi_rssi: 0
   });
   
   // Automation status
@@ -79,21 +105,85 @@ const Index = () => {
         setAutomationEnabled(data);
       }
     });
+    
+    // Threshold values reference
+    const tempThreshRef = ref(database, 'settings/temp_threshold');
+    const moistThreshRef = ref(database, 'settings/moisture_threshold');
+    const lightThreshRef = ref(database, 'settings/light_threshold');
+    const modeRef = ref(database, 'settings/threshold_mode');
+    const seasonRef = ref(database, 'settings/selected_season');
+    
+    const unsubscribeTemp = onValue(tempThreshRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setThresholds(prev => ({ ...prev, temperature: snapshot.val() }));
+      }
+    });
+    
+    const unsubscribeMoisture = onValue(moistThreshRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setThresholds(prev => ({ ...prev, moisture: snapshot.val() }));
+      }
+    });
+    
+    const unsubscribeLight = onValue(lightThreshRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setThresholds(prev => ({ ...prev, light: snapshot.val() }));
+      }
+    });
+    
+    const unsubscribeMode = onValue(modeRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setThresholds(prev => ({ ...prev, mode: snapshot.val() }));
+      }
+    });
+    
+    const unsubscribeSeason = onValue(seasonRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setThresholds(prev => ({ ...prev, season: snapshot.val() }));
+      }
+    });
+    
+    // System information reference
+    const systemRef = ref(database, 'system');
+    const unsubscribeSystem = onValue(systemRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        setSystemInfo({
+          free_heap: data.free_heap || 0,
+          last_update: data.last_update || '',
+          status: data.status || 'offline',
+          uptime: data.uptime || '',
+          wifi_rssi: data.wifi_rssi || 0
+        });
+      }
+    });
 
     return () => {
       unsubscribeSensor();
       unsubscribeAutomation();
+      unsubscribeTemp();
+      unsubscribeMoisture();
+      unsubscribeLight();
+      unsubscribeMode();
+      unsubscribeSeason();
+      unsubscribeSystem();
     };
   }, []);
 
-  // Tab icons mapping
-  const tabIcons = {
-    dashboard: <Leaf className="mr-2 h-4 w-4" />,
-    controls: <Settings className="mr-2 h-4 w-4" />,
-    history: <History className="mr-2 h-4 w-4" />,
-    addplant: <Plus className="mr-2 h-4 w-4" />,
-    plantlist: <ChartLine className="mr-2 h-4 w-4" />,
-    settings: <Settings className="mr-2 h-4 w-4" />
+  // Format uptime to human readable
+  const formatUptime = (seconds: string) => {
+    const uptimeSeconds = parseInt(seconds);
+    const days = Math.floor(uptimeSeconds / 86400);
+    const hours = Math.floor((uptimeSeconds % 86400) / 3600);
+    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+    
+    if (days > 0) {
+      return `${days}d ${hours}h`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else {
+      return `${minutes}m`;
+    }
   };
 
   return (
@@ -115,6 +205,7 @@ const Index = () => {
               { id: 'history', label: 'Historical Data', icon: <History className="mr-2 h-4 w-4" /> },
               { id: 'addplant', label: 'Add Plant', icon: <Plus className="mr-2 h-4 w-4" /> },
               { id: 'plantlist', label: 'Plant List', icon: <ChartLine className="mr-2 h-4 w-4" /> },
+              { id: 'system', label: 'System Info', icon: <Server className="mr-2 h-4 w-4" /> },
               { id: 'settings', label: 'Settings', icon: <Settings className="mr-2 h-4 w-4" /> }
             ].map((item) => (
               <Button
@@ -148,6 +239,54 @@ const Index = () => {
               <div className="flex items-center gap-2 text-xs">
                 <Sun className="h-3 w-3 text-amber-500" />
                 <span>{sensorData.lighting}%</span>
+              </div>
+            </div>
+            
+            {/* Thresholds display */}
+            <h3 className="text-sm font-medium text-muted-foreground mt-4">Thresholds</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-2 text-xs">
+                <Thermometer className="h-3 w-3 text-red-500" />
+                <span>Temp: {thresholds.temperature}°C</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <Droplet className="h-3 w-3 text-orange-500" />
+                <span>Soil: {thresholds.moisture}%</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <Sun className="h-3 w-3 text-amber-500" />
+                <span>Light: {thresholds.light}%</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <Gauge className="h-3 w-3 text-emerald-500" />
+                <Badge variant="outline" className="text-[10px] py-0 h-5">
+                  {thresholds.mode === 'manual' ? 'Manual' : 
+                   thresholds.mode === 'season' ? thresholds.season.charAt(0).toUpperCase() + thresholds.season.slice(1) + ' Season' : 
+                   'Crop Specific'}
+                </Badge>
+              </div>
+            </div>
+            
+            {/* System Info Summary */}
+            <h3 className="text-sm font-medium text-muted-foreground mt-4">System Status</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-2 text-xs">
+                <Activity className="h-3 w-3 text-emerald-500" />
+                <Badge variant={systemInfo.status === 'online' ? 'default' : 'destructive'} className="text-[10px] py-0 h-5">
+                  {systemInfo.status}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <Clock className="h-3 w-3 text-blue-500" />
+                <span>Up: {formatUptime(systemInfo.uptime)}</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <Wifi className="h-3 w-3 text-blue-500" />
+                <span>WiFi: {systemInfo.wifi_rssi} dBm</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <Server className="h-3 w-3 text-purple-500" />
+                <span>Mem: {Math.round(systemInfo.free_heap/1024)} KB</span>
               </div>
             </div>
           </div>
@@ -190,6 +329,10 @@ const Index = () => {
           
           {activeTab === 'plantlist' && (
             <PlantList database={database} toast={toast} />
+          )}
+          
+          {activeTab === 'system' && (
+            <SystemInfo systemInfo={systemInfo} database={database} toast={toast} />
           )}
           
           {activeTab === 'settings' && (

@@ -56,12 +56,18 @@ bool fan_status = false;
 bool pump_status = false;
 bool light_status = false;
 bool automation_enabled = true;
+bool reboot_requested = false;
 
 // Sensor values
 float temperature = 0;
 float humidity = 0;
 int light = 0;
 float moisture_percentage = 0;
+
+// System info
+unsigned long start_time = 0;
+int free_heap_memory = 0;
+long wifi_signal_strength = 0;
 
 // Initialize DHT sensor
 DHT dht(DHT_PIN, DHT_TYPE);
@@ -72,12 +78,18 @@ void controlDevices();
 void sendToFirebase();
 void checkFirebaseCommands();
 void checkThresholdUpdates();
+void checkSystemRebootRequest();
+void updateSystemInfo();
 
 unsigned long dataMillis = 0;
+unsigned long systemInfoMillis = 0;
 bool signupOK = false;
 
 void setup() {
   Serial.begin(115200);
+  
+  // Record start time for uptime calculation
+  start_time = millis();
   
   // Initialize pins
   dht.begin();
@@ -116,6 +128,11 @@ void setup() {
   
   // Get SignUp status
   signupOK = true;  // Assuming signup is already done
+  
+  // Record system boot time
+  if (Firebase.ready() && signupOK) {
+    Firebase.RTDB.setInt(&fbdo, "system/last_reboot", millis());
+  }
 }
 
 void loop() {
@@ -134,7 +151,16 @@ void loop() {
     return;
   }
 
-  // Update every 10 seconds
+  // Check for system reboot request
+  checkSystemRebootRequest();
+
+  // Update system info every minute
+  if (millis() - systemInfoMillis > 60000 || systemInfoMillis == 0) {
+    systemInfoMillis = millis();
+    updateSystemInfo();
+  }
+
+  // Update sensor data every 10 seconds
   if (millis() - dataMillis > 10000 || dataMillis == 0) {
     dataMillis = millis();
     
@@ -262,7 +288,7 @@ void checkFirebaseCommands() {
     // If automation is disabled, check manual controls
     if (!automation_enabled) {
       // Check fan control
-      if (Firebase.RTDB.getBool(&fbdo, "manual_control/fan")) {
+      if (Firebase.RTDB.getBool(&fbdo, "actuator_status/fan")) {
         if (fbdo.dataType() == "boolean") {
           bool should_be_on = fbdo.boolData();
           digitalWrite(RELAY_FAN, should_be_on ? LOW : HIGH);  // LOW = ON, HIGH = OFF
@@ -271,7 +297,7 @@ void checkFirebaseCommands() {
       }
 
       // Check pump control
-      if (Firebase.RTDB.getBool(&fbdo, "manual_control/pump")) {
+      if (Firebase.RTDB.getBool(&fbdo, "actuator_status/pump")) {
         if (fbdo.dataType() == "boolean") {
           bool should_be_on = fbdo.boolData();
           digitalWrite(RELAY_PUMP, should_be_on ? LOW : HIGH);
@@ -280,7 +306,7 @@ void checkFirebaseCommands() {
       }
 
       // Check light control
-      if (Firebase.RTDB.getBool(&fbdo, "manual_control/light")) {
+      if (Firebase.RTDB.getBool(&fbdo, "actuator_status/light")) {
         if (fbdo.dataType() == "boolean") {
           bool should_be_on = fbdo.boolData();
           digitalWrite(RELAY_LEDS, should_be_on ? LOW : HIGH);
@@ -293,11 +319,11 @@ void checkFirebaseCommands() {
   }
 }
 
-// New function to check and update thresholds from Firebase
 void checkThresholdUpdates() {
   if (Firebase.ready() && signupOK) {
+    // Check for threshold updates - updated to match the user's Firebase structure
     // Check temperature threshold
-    if (Firebase.RTDB.getInt(&fbdo, "system_thresholds/temp_thresh")) {
+    if (Firebase.RTDB.getInt(&fbdo, "settings/temp_threshold")) {
       if (fbdo.dataType() == "int" || fbdo.dataType() == "float") {
         int new_temp_thresh = fbdo.intData();
         if (new_temp_thresh > 0 && new_temp_thresh <= 40 && new_temp_thresh != temp_thresh) {
@@ -308,7 +334,7 @@ void checkThresholdUpdates() {
     }
     
     // Check moisture threshold
-    if (Firebase.RTDB.getInt(&fbdo, "system_thresholds/moist_thresh")) {
+    if (Firebase.RTDB.getInt(&fbdo, "settings/moisture_threshold")) {
       if (fbdo.dataType() == "int" || fbdo.dataType() == "float") {
         int new_moist_thresh = fbdo.intData();
         if (new_moist_thresh > 0 && new_moist_thresh <= 100 && new_moist_thresh != moist_thresh) {
@@ -319,6 +345,39 @@ void checkThresholdUpdates() {
     }
     
     // Check light threshold
+    if (Firebase.RTDB.getInt(&fbdo, "settings/light_threshold")) {
+      if (fbdo.dataType() == "int" || fbdo.dataType() == "float") {
+        int new_lum_thresh = fbdo.intData();
+        if (new_lum_thresh > 0 && new_lum_thresh <= 100 && new_lum_thresh != lum_thresh) {
+          lum_thresh = new_lum_thresh;
+          Serial.println("Light threshold updated to: " + String(lum_thresh));
+        }
+      }
+    }
+    
+    // Also check the system_thresholds path for backward compatibility
+    if (Firebase.RTDB.getInt(&fbdo, "system_thresholds/temp_thresh")) {
+      if (fbdo.dataType() == "int" || fbdo.dataType() == "float") {
+        int new_temp_thresh = fbdo.intData();
+        if (new_temp_thresh > 0 && new_temp_thresh <= 40 && new_temp_thresh != temp_thresh) {
+          temp_thresh = new_temp_thresh;
+          Serial.println("Temperature threshold updated to: " + String(temp_thresh));
+        }
+      }
+    }
+    
+    // Same for moisture
+    if (Firebase.RTDB.getInt(&fbdo, "system_thresholds/moist_thresh")) {
+      if (fbdo.dataType() == "int" || fbdo.dataType() == "float") {
+        int new_moist_thresh = fbdo.intData();
+        if (new_moist_thresh > 0 && new_moist_thresh <= 100 && new_moist_thresh != moist_thresh) {
+          moist_thresh = new_moist_thresh;
+          Serial.println("Moisture threshold updated to: " + String(moist_thresh));
+        }
+      }
+    }
+    
+    // And light
     if (Firebase.RTDB.getInt(&fbdo, "system_thresholds/lum_thresh")) {
       if (fbdo.dataType() == "int" || fbdo.dataType() == "float") {
         int new_lum_thresh = fbdo.intData();
@@ -330,3 +389,47 @@ void checkThresholdUpdates() {
     }
   }
 }
+
+// New function to check for system reboot requests
+void checkSystemRebootRequest() {
+  if (Firebase.ready() && signupOK) {
+    if (Firebase.RTDB.getBool(&fbdo, "system/reboot_request")) {
+      if (fbdo.dataType() == "boolean" && fbdo.boolData()) {
+        Serial.println("Reboot requested from web interface!");
+        
+        // Set flag to false immediately to prevent multiple reboots
+        Firebase.RTDB.setBool(&fbdo, "system/reboot_request", false);
+        
+        // Update reboot timestamp
+        Firebase.RTDB.setInt(&fbdo, "system/last_reboot", millis());
+        
+        // Wait a moment to ensure Firebase updates are sent
+        delay(1000);
+        
+        Serial.println("Rebooting ESP32 now...");
+        ESP.restart(); // Reboot the ESP32
+      }
+    }
+  }
+}
+
+// New function to update system information
+void updateSystemInfo() {
+  if (Firebase.ready() && signupOK) {
+    // Get system information
+    free_heap_memory = ESP.getFreeHeap();
+    wifi_signal_strength = WiFi.RSSI();
+    unsigned long uptime_sec = (millis() - start_time) / 1000;
+    
+    // Send system information to Firebase
+    Firebase.RTDB.setInt(&fbdo, "system/free_heap", free_heap_memory);
+    Firebase.RTDB.setInt(&fbdo, "system/wifi_rssi", wifi_signal_strength);
+    Firebase.RTDB.setString(&fbdo, "system/uptime", String(uptime_sec));
+    Firebase.RTDB.setString(&fbdo, "system/status", "online");
+    
+    Serial.println("System info updated:");
+    Serial.printf("Free heap: %d bytes, WiFi RSSI: %d dBm, Uptime: %lu seconds\n", 
+                  free_heap_memory, wifi_signal_strength, uptime_sec);
+  }
+}
+
