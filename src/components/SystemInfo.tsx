@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Database, ref, onValue } from 'firebase/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,6 +20,7 @@ import {
   AlertTriangle,
   Server
 } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 
 interface SystemInfoProps {
   database: Database;

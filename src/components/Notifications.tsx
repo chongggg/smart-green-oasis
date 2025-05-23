@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Database, ref, onValue, set, push, remove } from 'firebase/database';
 import { 
   BellRing, 
-  Calendar, 
+  Calendar as CalendarIcon, 
   AlertTriangle, 
   CheckCircle, 
   Clock, 
@@ -11,7 +11,6 @@ import {
   Bell,
   CheckCheck,
   Filter,
-  Calendar as CalendarIcon,
   PlusCircle,
   Eye,
   EyeOff,
@@ -400,7 +399,7 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
           </TabsTrigger>
           <TabsTrigger value="reminders" className="relative">
             <div className="flex items-center">
-              <Calendar className="mr-2 h-4 w-4" />
+              <CalendarIcon className="mr-2 h-4 w-4" />
               Plant Care Reminders
               {reminders.filter(r => !r.completed).length > 0 && (
                 <Badge variant="secondary" className="ml-2 absolute -right-1 -top-1 h-5 w-5 flex items-center justify-center p-0 text-[10px]">
@@ -452,7 +451,6 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                     id="show-read"
                     checked={showRead}
                     onCheckedChange={setShowRead}
-                    size="sm"
                   />
                   <Label htmlFor="show-read" className="text-sm">
                     {showRead ? <Eye className="h-3.5 w-3.5 inline mr-1" /> : <EyeOff className="h-3.5 w-3.5 inline mr-1" />}
@@ -506,7 +504,7 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                             <h4 className="font-medium">{notification.title}</h4>
                             <Badge variant={
                               notification.type === 'warning' ? 'destructive' : 
-                              notification.type === 'success' ? 'default' : 
+                              notification.type === 'success' ? 'success' : 
                               'secondary'
                             } className="text-xs">
                               {notification.type}
@@ -568,7 +566,7 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
             <CardHeader className="pb-2">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-primary" />
+                  <CalendarIcon className="h-5 w-5 text-primary" />
                   Plant Care Reminders
                 </CardTitle>
                 <Dialog>
@@ -664,6 +662,7 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                             <Switch 
                               checked={reminder.completed}
                               onCheckedChange={() => toggleReminderCompletion(reminder.id, reminder.completed)}
+                              id={`reminder-${reminder.id}`}
                               className="mt-1"
                             />
                             <div>
@@ -702,7 +701,7 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                   </div>
                 ) : (
                   <div className="text-center py-12 text-muted-foreground">
-                    <Calendar className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                    <CalendarIcon className="h-12 w-12 mx-auto mb-3 opacity-20" />
                     <p>No plant care reminders</p>
                     <Button onClick={createReminder} variant="link" size="sm">
                       Create your first reminder

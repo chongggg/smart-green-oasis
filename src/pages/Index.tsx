@@ -391,7 +391,7 @@ const Index = () => {
           )}
           
           {activeTab === 'system' && (
-            <SystemInfo systemInfo={systemInfo} database={database} toast={toast} />
+            <SystemInfo database={database} toast={toast} />
           )}
           
           {activeTab === 'settings' && (
