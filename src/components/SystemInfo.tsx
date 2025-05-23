@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Database, ref, onValue, set } from 'firebase/database';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -10,7 +9,7 @@ import {
   Clock, 
   Wifi, 
   RefreshCw,
-  Memory,
+  Cpu,
   InfoIcon,
   Calendar,
   Upload,
@@ -231,7 +230,7 @@ export const SystemInfo = ({ systemInfo, database, toast }: SystemInfoProps) => 
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2">
-              <Memory className="h-5 w-5 text-primary" />
+              <Cpu className="h-5 w-5 text-primary" />
               Memory Usage
             </CardTitle>
             <CardDescription>System memory allocation and usage</CardDescription>
