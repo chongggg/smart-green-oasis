@@ -38,7 +38,8 @@ import { Analytics } from '@/components/Analytics';
 const Index = () => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  // Changed the default value to true for dark mode
+  const [isDarkMode, setIsDarkMode] = useState(true);
   const [plants, setPlants] = useState<any[]>([]);
   
   // Sensor data

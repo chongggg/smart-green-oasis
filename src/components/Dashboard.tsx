@@ -426,27 +426,27 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
           </CardContent>
         </Card>
         
-        {/* Calendar Section */}
+        {/* Calendar Section - UPDATED FOR BETTER RESPONSIVENESS */}
         <Card className="col-span-1 md:col-span-2 card-greenhouse">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Crop Calendar</CardTitle>
             <CalendarDays className="h-5 w-5 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
+            <div className="flex flex-col lg:flex-row gap-4">
+              <div className="w-full lg:w-1/2">
                 <Calendar
                   mode="single"
                   selected={selectedDate}
                   onSelect={setSelectedDate}
-                  className="rounded-md border p-3 pointer-events-auto bg-card/50 backdrop-blur-sm"
+                  className="rounded-md border w-full max-w-full p-1 sm:p-3 pointer-events-auto bg-card/50 backdrop-blur-sm"
                   modifiers={modifiers}
                   modifiersStyles={modifiersStyles}
                 />
               </div>
-              <div className="flex-1">
-                <div className="border rounded-md p-4 h-full bg-card/50 backdrop-blur-sm">
-                  <h3 className="font-medium mb-4">
+              <div className="w-full lg:w-1/2">
+                <div className="border rounded-md p-2 sm:p-4 h-full bg-card/50 backdrop-blur-sm">
+                  <h3 className="font-medium mb-4 text-sm sm:text-base">
                     {selectedDate ? selectedDate.toLocaleDateString('en-US', { 
                       weekday: 'long', 
                       year: 'numeric', 
@@ -455,25 +455,25 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
                     }) : 'Select a date'}
                   </h3>
                   
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-[180px] overflow-y-auto">
                     {eventsForSelectedDate.length > 0 ? (
                       eventsForSelectedDate.map((event, i) => (
                         <div key={i} 
-                          className={`flex items-center gap-2 border-l-4 pl-2 py-2 rounded-sm bg-white/40 backdrop-blur-sm shadow-sm ${
+                          className={`flex items-center gap-2 border-l-4 pl-2 py-2 rounded-sm bg-white/40 dark:bg-gray-800/40 backdrop-blur-sm shadow-sm ${
                             event.type === 'planting' ? "border-emerald-500" : "border-amber-500"
                           }`}>
                           <Badge variant={event.type === 'planting' ? 'default' : 'secondary'}>
                             {event.type === 'planting' ? 'Planting' : 'Harvest'}
                           </Badge>
-                          <span>{event.title}</span>
+                          <span className="text-sm">{event.title}</span>
                         </div>
                       ))
                     ) : (
-                      <p className="text-muted-foreground">No events scheduled for this date</p>
+                      <p className="text-muted-foreground text-sm">No events scheduled for this date</p>
                     )}
                   </div>
                   
-                  <div className="mt-4 flex gap-4">
+                  <div className="mt-4 flex flex-wrap gap-4">
                     <div className="flex items-center gap-1">
                       <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
                       <span className="text-xs">Planting</span>

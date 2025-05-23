@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Database, ref, get, query, orderByChild, limitToLast, startAt, endAt } from 'firebase/database';
 import { 
@@ -96,7 +95,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
         const startTime = currentTime - timeRangeMs;
         
         // Get sensor history from Firebase
-        const historyRef = ref(database, 'sensor_history');
+        const historyRef = ref(database, 'sensor_data');
         const historyQuery = query(
           historyRef,
           orderByChild('timestamp'),
