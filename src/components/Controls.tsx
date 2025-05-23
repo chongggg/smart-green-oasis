@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Database, ref, set, get } from 'firebase/database';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -401,38 +400,40 @@ export const Controls = ({
               >
                 {Object.entries(seasonPresets).map(([season, preset]) => (
                   <div key={season} className="relative">
-                    <RadioGroupItem
-                      value={season}
-                      id={season}
-                      className="absolute top-4 left-4 z-10"
-                    />
-                    <Label
-                      htmlFor={season}
-                      className={`flex flex-col border p-4 rounded-md cursor-pointer transition-all ${
-                        selectedSeason === season
-                          ? 'bg-accent border-primary'
-                          : 'hover:bg-accent/50'
-                      }`}
-                    >
-                      <span className="font-medium mb-1">{preset.name}</span>
-                      <span className="text-xs text-muted-foreground mb-3">
-                        {preset.description}
-                      </span>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div className="flex items-center gap-1">
-                          <Gauge size={14} className="text-red-500" />
-                          <span>{preset.temperature}°C</span>
+                    <div className="flex items-center h-full">
+                      <RadioGroupItem
+                        value={season}
+                        id={season}
+                        className="absolute left-4 top-4 z-10"
+                      />
+                      <Label
+                        htmlFor={season}
+                        className={`flex flex-col border p-4 pl-10 rounded-md cursor-pointer transition-all w-full ${
+                          selectedSeason === season
+                            ? 'bg-accent border-primary'
+                            : 'hover:bg-accent/50'
+                        }`}
+                      >
+                        <span className="font-medium mb-1">{preset.name}</span>
+                        <span className="text-xs text-muted-foreground mb-3">
+                          {preset.description}
+                        </span>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="flex items-center gap-1">
+                            <Gauge size={14} className="text-red-500" />
+                            <span>{preset.temperature}°C</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Droplet size={14} className="text-blue-500" />
+                            <span>{preset.moisture}%</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Sun size={14} className="text-amber-500" />
+                            <span>{preset.light}%</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Droplet size={14} className="text-blue-500" />
-                          <span>{preset.moisture}%</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Sun size={14} className="text-amber-500" />
-                          <span>{preset.light}%</span>
-                        </div>
-                      </div>
-                    </Label>
+                      </Label>
+                    </div>
                   </div>
                 ))}
               </RadioGroup>
@@ -460,38 +461,40 @@ export const Controls = ({
               >
                 {Object.entries(cropPresets).map(([crop, preset]) => (
                   <div key={crop} className="relative">
-                    <RadioGroupItem
-                      value={crop}
-                      id={crop}
-                      className="absolute top-4 left-4 z-10"
-                    />
-                    <Label
-                      htmlFor={crop}
-                      className={`flex flex-col border p-4 rounded-md cursor-pointer transition-all ${
-                        selectedCrop === crop
-                          ? 'bg-accent border-primary'
-                          : 'hover:bg-accent/50'
-                      }`}
-                    >
-                      <span className="font-medium mb-1">{preset.name}</span>
-                      <span className="text-xs text-muted-foreground mb-3">
-                        {preset.description}
-                      </span>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div className="flex items-center gap-1">
-                          <Gauge size={14} className="text-red-500" />
-                          <span>{preset.temperature}°C</span>
+                    <div className="flex items-center h-full">
+                      <RadioGroupItem
+                        value={crop}
+                        id={crop}
+                        className="absolute left-4 top-4 z-10"
+                      />
+                      <Label
+                        htmlFor={crop}
+                        className={`flex flex-col border p-4 pl-10 rounded-md cursor-pointer transition-all w-full ${
+                          selectedCrop === crop
+                            ? 'bg-accent border-primary'
+                            : 'hover:bg-accent/50'
+                        }`}
+                      >
+                        <span className="font-medium mb-1">{preset.name}</span>
+                        <span className="text-xs text-muted-foreground mb-3">
+                          {preset.description}
+                        </span>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="flex items-center gap-1">
+                            <Gauge size={14} className="text-red-500" />
+                            <span>{preset.temperature}°C</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Droplet size={14} className="text-blue-500" />
+                            <span>{preset.moisture}%</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Sun size={14} className="text-amber-500" />
+                            <span>{preset.light}%</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Droplet size={14} className="text-blue-500" />
-                          <span>{preset.moisture}%</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Sun size={14} className="text-amber-500" />
-                          <span>{preset.light}%</span>
-                        </div>
-                      </div>
-                    </Label>
+                      </Label>
+                    </div>
                   </div>
                 ))}
               </RadioGroup>

@@ -15,7 +15,9 @@ import {
   Server,
   Wifi,
   Clock,
-  Activity
+  Activity,
+  BellRing,
+  BarChart3
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -30,11 +32,14 @@ import { AddPlant } from '@/components/AddPlant';
 import { PlantList } from '@/components/PlantList';
 import { Settings as SettingsComponent } from '@/components/Settings';
 import { SystemInfo } from '@/components/SystemInfo';
+import { Notifications } from '@/components/Notifications';
+import { Analytics } from '@/components/Analytics';
 
 const Index = () => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [plants, setPlants] = useState<any[]>([]);
   
   // Sensor data
   const [sensorData, setSensorData] = useState({
@@ -68,6 +73,9 @@ const Index = () => {
   // Automation status
   const [automationEnabled, setAutomationEnabled] = useState(true);
   
+  // Notification count
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  
   // Theme switching
   useEffect(() => {
     const root = window.document.documentElement;
@@ -77,6 +85,23 @@ const Index = () => {
       root.classList.remove("dark");
     }
   }, [isDarkMode]);
+
+  // Fetch plants for analytics
+  useEffect(() => {
+    const plantsRef = ref(database, 'plants');
+    const unsubscribe = onValue(plantsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const plantsArray = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }));
+        setPlants(plantsArray);
+      }
+    });
+    
+    return () => unsubscribe();
+  }, []);
 
   // Listen to Firebase data
   useEffect(() => {
@@ -157,6 +182,18 @@ const Index = () => {
         });
       }
     });
+    
+    // Count unread notifications
+    const notificationsRef = ref(database, 'notifications');
+    const unsubscribeNotifications = onValue(notificationsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const notificationArray = Object.values(data) as any[];
+        setUnreadNotifications(notificationArray.filter(n => !n.read).length);
+      } else {
+        setUnreadNotifications(0);
+      }
+    });
 
     return () => {
       unsubscribeSensor();
@@ -167,6 +204,7 @@ const Index = () => {
       unsubscribeMode();
       unsubscribeSeason();
       unsubscribeSystem();
+      unsubscribeNotifications();
     };
   }, []);
 
@@ -202,6 +240,8 @@ const Index = () => {
             {[
               { id: 'dashboard', label: 'Dashboard', icon: <Leaf className="mr-2 h-4 w-4" /> },
               { id: 'controls', label: 'Controls', icon: <Settings className="mr-2 h-4 w-4" /> },
+              { id: 'analytics', label: 'Analytics', icon: <BarChart3 className="mr-2 h-4 w-4" /> },
+              { id: 'notifications', label: 'Notifications', icon: <BellRing className="mr-2 h-4 w-4" />, badge: unreadNotifications },
               { id: 'history', label: 'Historical Data', icon: <History className="mr-2 h-4 w-4" /> },
               { id: 'addplant', label: 'Add Plant', icon: <Plus className="mr-2 h-4 w-4" /> },
               { id: 'plantlist', label: 'Plant List', icon: <ChartLine className="mr-2 h-4 w-4" /> },
@@ -216,6 +256,11 @@ const Index = () => {
               >
                 {item.icon}
                 {item.label}
+                {item.badge && item.badge > 0 && (
+                  <Badge variant="destructive" className="ml-auto">
+                    {item.badge}
+                  </Badge>
+                )}
               </Button>
             ))}
           </nav>
@@ -316,6 +361,20 @@ const Index = () => {
               }}
               database={database}
               toast={toast}
+            />
+          )}
+          
+          {activeTab === 'analytics' && (
+            <Analytics 
+              database={database}
+              plants={plants}
+            />
+          )}
+          
+          {activeTab === 'notifications' && (
+            <Notifications
+              database={database}
+              sensorData={sensorData}
             />
           )}
           

@@ -46,6 +46,28 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
   const [events, setEvents] = useState<PlantEvent[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [eventsForSelectedDate, setEventsForSelectedDate] = useState<PlantEvent[]>([]);
+  const [realActuatorStatus, setRealActuatorStatus] = useState({
+    fan: false,
+    pump: false,
+    light: false
+  });
+  
+  // Fetch real actuator status directly from Firebase
+  useEffect(() => {
+    const actuatorRef = ref(database, 'actuator_status');
+    const unsubscribe = onValue(actuatorRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        setRealActuatorStatus({
+          fan: data.fan || false,
+          pump: data.pump || false,
+          light: data.light || false
+        });
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [database]);
   
   // Fetch plants data
   useEffect(() => {
@@ -307,38 +329,38 @@ export const Dashboard = ({ sensorData, actuatorStatus, database }: DashboardPro
       {/* Actuator Status */}
       <h2 className="text-xl font-semibold mt-8">Automation Status</h2>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className={`transition-all duration-300 ${actuatorStatus.fan ? "border-green-500 shadow-md shadow-green-100" : "border-gray-300"}`}>
+        <Card className={`transition-all duration-300 ${realActuatorStatus.fan ? "border-green-500 shadow-md shadow-green-100" : "border-gray-300"}`}>
           <CardHeader className="space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Fan Status</CardTitle>
           </CardHeader>
           <CardContent className="flex justify-between items-center">
-            <Fan className={`h-8 w-8 ${actuatorStatus.fan ? "text-green-500 animate-spin" : "text-gray-400"}`} />
-            <span className={`font-bold ${actuatorStatus.fan ? "text-green-500" : "text-gray-400"}`}>
-              {actuatorStatus.fan ? "ON" : "OFF"}
+            <Fan className={`h-8 w-8 ${realActuatorStatus.fan ? "text-green-500 animate-spin" : "text-gray-400"}`} />
+            <span className={`font-bold ${realActuatorStatus.fan ? "text-green-500" : "text-gray-400"}`}>
+              {realActuatorStatus.fan ? "ON" : "OFF"}
             </span>
           </CardContent>
         </Card>
         
-        <Card className={`transition-all duration-300 ${actuatorStatus.pump ? "border-blue-500 shadow-md shadow-blue-100" : "border-gray-300"}`}>
+        <Card className={`transition-all duration-300 ${realActuatorStatus.pump ? "border-blue-500 shadow-md shadow-blue-100" : "border-gray-300"}`}>
           <CardHeader className="space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Water Pump Status</CardTitle>
           </CardHeader>
           <CardContent className="flex justify-between items-center">
-            <Pump className={`h-8 w-8 ${actuatorStatus.pump ? "text-blue-500" : "text-gray-400"}`} />
-            <span className={`font-bold ${actuatorStatus.pump ? "text-blue-500" : "text-gray-400"}`}>
-              {actuatorStatus.pump ? "ON" : "OFF"}
+            <Pump className={`h-8 w-8 ${realActuatorStatus.pump ? "text-blue-500" : "text-gray-400"}`} />
+            <span className={`font-bold ${realActuatorStatus.pump ? "text-blue-500" : "text-gray-400"}`}>
+              {realActuatorStatus.pump ? "ON" : "OFF"}
             </span>
           </CardContent>
         </Card>
         
-        <Card className={`transition-all duration-300 ${actuatorStatus.light ? "border-amber-500 shadow-md shadow-amber-100" : "border-gray-300"}`}>
+        <Card className={`transition-all duration-300 ${realActuatorStatus.light ? "border-amber-500 shadow-md shadow-amber-100" : "border-gray-300"}`}>
           <CardHeader className="space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Grow Light Status</CardTitle>
           </CardHeader>
           <CardContent className="flex justify-between items-center">
-            <Sun className={`h-8 w-8 ${actuatorStatus.light ? "text-amber-500" : "text-gray-400"}`} />
-            <span className={`font-bold ${actuatorStatus.light ? "text-amber-500" : "text-gray-400"}`}>
-              {actuatorStatus.light ? "ON" : "OFF"}
+            <Sun className={`h-8 w-8 ${realActuatorStatus.light ? "text-amber-500" : "text-gray-400"}`} />
+            <span className={`font-bold ${realActuatorStatus.light ? "text-amber-500" : "text-gray-400"}`}>
+              {realActuatorStatus.light ? "ON" : "OFF"}
             </span>
           </CardContent>
         </Card>
