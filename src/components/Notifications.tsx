@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Database, ref, onValue, set, push } from 'firebase/database';
 import { BellRing, Calendar, AlertTriangle, CheckCircle, Clock, Trash2 } from 'lucide-react';
@@ -135,7 +134,7 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
       toast({
         title: title,
         description: message,
-        variant: type === 'warning' ? 'destructive' : type === 'success' ? 'default' : 'secondary',
+        variant: type === 'warning' ? 'destructive' : 'default',
       });
     }
   };
