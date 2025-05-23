@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Database, ref, set, get } from 'firebase/database';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -210,17 +211,21 @@ export const Controls = ({
       // Update threshold values in state to reflect changes
       setThresholds(updatedThresholds);
       
-      // Update threshold values based on the Firebase structure
+      // Update threshold values based on the correct Firebase structure
       await set(ref(database, 'settings/temp_threshold'), updatedThresholds.temperature);
       await set(ref(database, 'settings/moisture_threshold'), updatedThresholds.moisture);
       await set(ref(database, 'settings/light_threshold'), updatedThresholds.light);
       
       // Also save the mode and selected preset
       await set(ref(database, 'settings/threshold_mode'), thresholdMode);
-      await set(ref(database, 'settings/selected_season'), selectedSeason);
-      await set(ref(database, 'settings/selected_crop'), selectedCrop);
       
-      // Update ESP32 thresholds for real-time control
+      if (thresholdMode === 'season') {
+        await set(ref(database, 'settings/selected_season'), selectedSeason);
+      } else if (thresholdMode === 'crop') {
+        await set(ref(database, 'settings/selected_crop'), selectedCrop);
+      }
+      
+      // Update ESP32 thresholds for real-time control - this can be removed if not needed
       await set(ref(database, 'system_thresholds/temp_thresh'), updatedThresholds.temperature);
       await set(ref(database, 'system_thresholds/moist_thresh'), updatedThresholds.moisture);
       await set(ref(database, 'system_thresholds/lum_thresh'), updatedThresholds.light);
@@ -307,7 +312,7 @@ export const Controls = ({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue={thresholdMode} onValueChange={(value) => setThresholdMode(value as 'manual' | 'season' | 'crop')}>
+          <Tabs defaultValue={thresholdMode} value={thresholdMode} onValueChange={(value) => setThresholdMode(value as 'manual' | 'season' | 'crop')}>
             <TabsList className="mb-4">
               <TabsTrigger value="manual">Manual Control</TabsTrigger>
               <TabsTrigger value="season">Season Adaptive</TabsTrigger>
