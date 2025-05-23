@@ -191,7 +191,7 @@ export const Controls = ({
   const updateThresholds = async () => {
     try {
       // If season-based or crop-based, use the selected preset values
-      let updatedThresholds = thresholds;
+      let updatedThresholds = {...thresholds}; // Create a copy to avoid direct mutations
       
       if (thresholdMode === 'season') {
         updatedThresholds = {
@@ -206,6 +206,9 @@ export const Controls = ({
           light: cropPresets[selectedCrop].light
         };
       }
+      
+      // Update threshold values in state to reflect changes
+      setThresholds(updatedThresholds);
       
       // Update threshold values based on the Firebase structure
       await set(ref(database, 'settings/temp_threshold'), updatedThresholds.temperature);
