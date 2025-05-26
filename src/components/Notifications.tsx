@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Database, ref, onValue, set, push, remove } from 'firebase/database';
 import { 
@@ -10,12 +9,14 @@ import {
   Trash2,
   Bell,
   CheckCheck,
-  Filter,
   PlusCircle,
   Eye,
   EyeOff,
   Save,
-  ArrowDownUp
+  ArrowDownUp,
+  Settings,
+  Mail,
+  Send
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +51,8 @@ import {
 } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
+import { notificationService } from '@/services/notificationService';
+import { NotificationSettings } from '@/components/NotificationSettings';
 
 export type NotificationType = 'warning' | 'info' | 'success';
 
@@ -169,7 +172,7 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
   }, [sensorData, notificationsEnabled]);
   
   // Create a new system alert
-  const createSystemAlert = (title: string, message: string, type: NotificationType) => {
+  const createSystemAlert = async (title: string, message: string, type: NotificationType) => {
     // Check if a similar notification was created in the last hour to avoid spamming
     const oneHourAgo = Date.now() - (60 * 60 * 1000);
     const similarNotificationExists = notifications.some(
@@ -188,6 +191,13 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
       const notificationsRef = ref(database, 'notifications');
       push(notificationsRef, newNotification);
       
+      // Send external notifications (email/SMS)
+      try {
+        await notificationService.sendNotification(title, message, 'alert');
+      } catch (error) {
+        console.error('Failed to send external notification:', error);
+      }
+      
       toast({
         title: title,
         description: message,
@@ -195,7 +205,7 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
       });
     }
   };
-  
+
   // Create a new reminder
   const createReminder = () => {
     // Open in dialog mode now
@@ -206,8 +216,8 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
     });
   };
   
-  // Save the new reminder to Firebase
-  const saveNewReminder = () => {
+  // Enhanced reminder creation with notifications
+  const saveNewReminder = async () => {
     const reminderData = {
       title: newReminder.title,
       description: newReminder.description,
@@ -218,9 +228,20 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
     const remindersRef = ref(database, 'reminders');
     push(remindersRef, reminderData);
     
+    // Send reminder notification
+    try {
+      await notificationService.sendNotification(
+        `Reminder Set: ${newReminder.title}`,
+        `Due: ${format(newReminder.dueDate, 'PPP')} - ${newReminder.description}`,
+        'reminder'
+      );
+    } catch (error) {
+      console.error('Failed to send reminder notification:', error);
+    }
+    
     toast({
       title: 'Reminder Created',
-      description: 'A new plant care reminder has been added to your schedule'
+      description: 'A new plant care reminder has been added and notification sent'
     });
     
     // Reset form
@@ -360,23 +381,27 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Notifications & Reminders</h1>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            Notifications & Reminders
+          </h1>
           <p className="text-muted-foreground mt-1">
-            System alerts and plant care tasks
+            Smart alerts, reminders, and external notifications
           </p>
         </div>
         
-        <div className="flex items-center space-x-2 mt-2 md:mt-0">
-          <Label htmlFor="notifications-toggle">
-            System Alerts
-          </Label>
-          <Switch
-            id="notifications-toggle"
-            checked={notificationsEnabled}
-            onCheckedChange={setNotificationsEnabled}
-          />
+        <div className="flex items-center gap-4">
+          <div className="flex items-center space-x-2">
+            <Label htmlFor="notifications-toggle" className="text-sm font-medium">
+              System Alerts
+            </Label>
+            <Switch
+              id="notifications-toggle"
+              checked={notificationsEnabled}
+              onCheckedChange={setNotificationsEnabled}
+            />
+          </div>
         </div>
       </div>
       
@@ -385,37 +410,48 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
         onValueChange={setActiveTab}
         className="w-full"
       >
-        <TabsList className="grid grid-cols-2 mb-4">
-          <TabsTrigger value="alerts" className="relative">
-            <div className="flex items-center">
-              <Bell className="mr-2 h-4 w-4" />
-              System Alerts
+        <TabsList className="grid grid-cols-3 mb-6 bg-muted/50 p-1 rounded-lg">
+          <TabsTrigger value="alerts" className="relative rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">
+            <div className="flex items-center gap-2">
+              <Bell className="h-4 w-4" />
+              <span className="hidden sm:inline">System Alerts</span>
+              <span className="sm:hidden">Alerts</span>
               {notifications.filter(n => !n.read).length > 0 && (
-                <Badge variant="destructive" className="ml-2 absolute -right-1 -top-1 h-5 w-5 flex items-center justify-center p-0 text-[10px]">
+                <Badge variant="destructive" className="h-5 w-5 flex items-center justify-center p-0 text-[10px] animate-pulse">
                   {notifications.filter(n => !n.read).length}
                 </Badge>
               )}
             </div>
           </TabsTrigger>
-          <TabsTrigger value="reminders" className="relative">
-            <div className="flex items-center">
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              Plant Care Reminders
+          <TabsTrigger value="reminders" className="relative rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">
+            <div className="flex items-center gap-2">
+              <CalendarIcon className="h-4 w-4" />
+              <span className="hidden sm:inline">Reminders</span>
+              <span className="sm:hidden">Tasks</span>
               {reminders.filter(r => !r.completed).length > 0 && (
-                <Badge variant="secondary" className="ml-2 absolute -right-1 -top-1 h-5 w-5 flex items-center justify-center p-0 text-[10px]">
+                <Badge variant="secondary" className="h-5 w-5 flex items-center justify-center p-0 text-[10px]">
                   {reminders.filter(r => !r.completed).length}
                 </Badge>
               )}
             </div>
           </TabsTrigger>
+          <TabsTrigger value="settings" className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">
+            <div className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              <span className="hidden sm:inline">Settings</span>
+              <span className="sm:hidden">Config</span>
+            </div>
+          </TabsTrigger>
         </TabsList>
         
         <TabsContent value="alerts">
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <Card className="border-2 hover:border-primary/20 transition-all duration-300 shadow-lg hover:shadow-xl">
+            <CardHeader className="pb-4 bg-gradient-to-r from-primary/5 to-transparent">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <CardTitle className="flex items-center gap-2">
-                  <BellRing className="h-5 w-5 text-primary" />
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <BellRing className="h-5 w-5 text-primary" />
+                  </div>
                   System Alerts
                 </CardTitle>
                 <div className="flex gap-2 flex-wrap">
@@ -424,36 +460,34 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                       onClick={markAllAsRead}
                       variant="outline"
                       size="sm"
-                      className="h-8"
+                      className="h-8 hover:bg-primary/10 transition-colors"
                     >
                       <CheckCheck className="h-3.5 w-3.5 mr-1" />
                       Mark All Read
                     </Button>
                   )}
                   <Button
-                    onClick={() => createSystemAlert('Test Alert', 'This is a test alert', 'info')}
+                    onClick={() => createSystemAlert('Test Alert', 'This is a test alert from your smart greenhouse system', 'info')}
                     variant="outline"
                     size="sm"
-                    className="h-8"
+                    className="h-8 hover:bg-primary/10 transition-colors"
                   >
-                    <PlusCircle className="h-3.5 w-3.5 mr-1" />
+                    <Send className="h-3.5 w-3.5 mr-1" />
                     Test Alert
                   </Button>
                 </div>
               </div>
-              <CardDescription>
-                Keep track of important system events and alerts
-              </CardDescription>
               
-              <div className="flex flex-wrap gap-2 mt-3">
+              {/* Enhanced filter controls */}
+              <div className="flex flex-wrap gap-3 mt-4 p-3 bg-muted/30 rounded-lg">
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="show-read"
                     checked={showRead}
                     onCheckedChange={setShowRead}
                   />
-                  <Label htmlFor="show-read" className="text-sm">
-                    {showRead ? <Eye className="h-3.5 w-3.5 inline mr-1" /> : <EyeOff className="h-3.5 w-3.5 inline mr-1" />}
+                  <Label htmlFor="show-read" className="text-sm flex items-center gap-1">
+                    {showRead ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
                     {showRead ? "Show Read" : "Hide Read"}
                   </Label>
                 </div>
@@ -461,7 +495,7 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 px-2"
+                  className="h-8 px-3 hover:bg-primary/10"
                   onClick={() => setSortNewest(!sortNewest)}
                 >
                   <ArrowDownUp className="h-3.5 w-3.5 mr-1" />
@@ -472,70 +506,83 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                   value={filteredType}
                   onValueChange={(value) => setFilteredType(value as NotificationType | 'all')}
                 >
-                  <SelectTrigger className="h-8 w-[130px]">
+                  <SelectTrigger className="h-8 w-[140px] border-muted">
                     <SelectValue placeholder="Filter by type" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="warning">Warning</SelectItem>
-                    <SelectItem value="info">Info</SelectItem>
-                    <SelectItem value="success">Success</SelectItem>
+                    <SelectItem value="warning">⚠️ Warning</SelectItem>
+                    <SelectItem value="info">ℹ️ Info</SelectItem>
+                    <SelectItem value="success">✅ Success</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </CardHeader>
+            
             <CardContent>
-              <ScrollArea className="h-[400px] pr-4">
+              <ScrollArea className="h-[450px] pr-4">
                 {getFilteredNotifications().length > 0 ? (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {getFilteredNotifications().map((notification) => (
                       <div 
                         key={notification.id} 
-                        className={`border rounded-md p-3 flex gap-3 items-start ${
-                          notification.read ? 'bg-muted/20' : 'bg-card'
-                        } hover:bg-accent/20 transition-colors`}
+                        className={`group border-2 rounded-xl p-4 transition-all duration-300 hover:scale-[1.02] hover:shadow-md ${
+                          notification.read 
+                            ? 'bg-muted/20 border-muted' 
+                            : 'bg-card border-primary/20 shadow-sm'
+                        }`}
                       >
-                        {notification.type === 'warning' && <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />}
-                        {notification.type === 'info' && <BellRing className="h-5 w-5 text-primary shrink-0 mt-0.5" />}
-                        {notification.type === 'success' && <CheckCircle className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />}
-                        
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <h4 className="font-medium">{notification.title}</h4>
-                            <Badge variant={
-                              notification.type === 'warning' ? 'destructive' : 
-                              notification.type === 'success' ? 'success' : 
-                              'secondary'
-                            } className="text-xs">
-                              {notification.type}
-                            </Badge>
+                        <div className="flex gap-3 items-start">
+                          <div className={`p-2 rounded-lg ${
+                            notification.type === 'warning' ? 'bg-destructive/10' : 
+                            notification.type === 'success' ? 'bg-green-500/10' : 'bg-primary/10'
+                          }`}>
+                            {notification.type === 'warning' && <AlertTriangle className="h-5 w-5 text-destructive" />}
+                            {notification.type === 'info' && <BellRing className="h-5 w-5 text-primary" />}
+                            {notification.type === 'success' && <CheckCircle className="h-5 w-5 text-green-500" />}
                           </div>
-                          <p className="text-sm text-muted-foreground">{notification.message}</p>
-                          <div className="flex justify-between items-center mt-2">
-                            <div className="flex items-center text-xs text-muted-foreground">
-                              <Clock className="h-3 w-3 mr-1" />
-                              {formatDate(notification.timestamp)}
+                          
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-semibold text-sm">{notification.title}</h4>
+                              <Badge 
+                                variant={
+                                  notification.type === 'warning' ? 'destructive' : 
+                                  notification.type === 'success' ? 'default' : 
+                                  'secondary'
+                                } 
+                                className="text-xs px-2 py-1"
+                              >
+                                {notification.type}
+                              </Badge>
                             </div>
-                            <div className="flex gap-1">
-                              {!notification.read && (
+                            <p className="text-sm text-muted-foreground mb-3">{notification.message}</p>
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center text-xs text-muted-foreground">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {formatDate(notification.timestamp)}
+                              </div>
+                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                {!notification.read && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-7 px-2 hover:bg-primary/10"
+                                    onClick={() => markAsRead(notification.id)}
+                                  >
+                                    <CheckCheck className="h-3.5 w-3.5 mr-1" />
+                                    Read
+                                  </Button>
+                                )}
                                 <Button 
                                   variant="ghost" 
-                                  size="sm" 
-                                  className="h-7 px-2"
-                                  onClick={() => markAsRead(notification.id)}
+                                  size="icon" 
+                                  className="h-7 w-7 hover:bg-destructive/10 hover:text-destructive"
+                                  onClick={() => deleteNotification(notification.id)}
                                 >
-                                  <CheckCheck className="h-3.5 w-3.5 mr-1" />
-                                  Mark as read
+                                  <Trash2 className="h-4 w-4" />
                                 </Button>
-                              )}
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                onClick={() => deleteNotification(notification.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -543,30 +590,39 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <BellRing className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                    <p>No alerts to display</p>
-                    {filteredType !== 'all' || !showRead ? (
-                      <p className="text-sm mt-1">Try changing your filter settings</p>
-                    ) : null}
+                  <div className="text-center py-16">
+                    <div className="p-4 bg-muted/30 rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                      <BellRing className="h-10 w-10 text-muted-foreground/50" />
+                    </div>
+                    <h3 className="font-medium mb-2">No alerts to display</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {filteredType !== 'all' || !showRead ? 
+                        'Try adjusting your filter settings' : 
+                        'Your greenhouse is running smoothly'
+                      }
+                    </p>
                   </div>
                 )}
               </ScrollArea>
             </CardContent>
-            <CardFooter className="flex justify-between pt-0">
-              <div className="text-sm text-muted-foreground">
-                Total: {getFilteredNotifications().length} alerts
+            
+            <CardFooter className="bg-muted/20 rounded-b-lg">
+              <div className="flex justify-between items-center w-full text-sm text-muted-foreground">
+                <span>Displaying {getFilteredNotifications().length} alerts</span>
+                <span>{notifications.filter(n => !n.read).length} unread</span>
               </div>
             </CardFooter>
           </Card>
         </TabsContent>
         
         <TabsContent value="reminders">
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <Card className="border-2 hover:border-primary/20 transition-all duration-300 shadow-lg hover:shadow-xl">
+            <CardHeader className="pb-4 bg-gradient-to-r from-primary/5 to-transparent">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <CardTitle className="flex items-center gap-2">
-                  <CalendarIcon className="h-5 w-5 text-primary" />
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <CalendarIcon className="h-5 w-5 text-primary" />
+                  </div>
                   Plant Care Reminders
                 </CardTitle>
                 <Dialog>
@@ -574,12 +630,13 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                     <Button
                       onClick={createReminder}
                       size="sm"
+                      className="hover:bg-primary/10 transition-colors"
                     >
                       <PlusCircle className="h-4 w-4 mr-1" />
                       New Reminder
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="bg-card text-card-foreground border-2 shadow-lg">
                     <DialogHeader>
                       <DialogTitle>Create New Reminder</DialogTitle>
                       <DialogDescription>
@@ -611,13 +668,13 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
-                              className="w-full justify-start text-left font-normal"
+                              className="w-full justify-start text-left font-normal hover:bg-primary/10 transition-colors"
                             >
                               <CalendarIcon className="mr-2 h-4 w-4" />
                               {newReminder.dueDate ? format(newReminder.dueDate, 'PPP') : <span>Pick a date</span>}
                             </Button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
+                          <PopoverContent className="w-auto p-0 border-2 shadow-lg" align="start">
                             <Calendar
                               mode="single"
                               selected={newReminder.dueDate}
@@ -629,7 +686,7 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button variant="outline" onClick={() => {}}>Cancel</Button>
+                      <Button variant="ghost" onClick={() => {}}>Cancel</Button>
                       <Button 
                         onClick={saveNewReminder}
                         disabled={!newReminder.title || !newReminder.description}
@@ -641,21 +698,22 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                   </DialogContent>
                 </Dialog>
               </div>
-              <CardDescription>
-                Never forget important plant care tasks with reminders
-              </CardDescription>
             </CardHeader>
+            
             <CardContent>
-              <ScrollArea className="h-[400px] pr-4">
+              <ScrollArea className="h-[450px] pr-4">
                 {getFilteredReminders().length > 0 ? (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {getFilteredReminders().map((reminder) => (
                       <div 
                         key={reminder.id} 
-                        className={`border rounded-md p-3 ${
-                          reminder.completed ? 'bg-muted/20' : 
-                          reminder.dueDate < Date.now() ? 'bg-destructive/10' : 'bg-card'
-                        } hover:bg-accent/20 transition-colors`}
+                        className={`group border-2 rounded-xl p-4 transition-all duration-300 hover:scale-[1.02] hover:shadow-md ${
+                          reminder.completed 
+                            ? 'bg-muted/20 border-muted' 
+                            : reminder.dueDate < Date.now() 
+                              ? 'bg-destructive/10 border-destructive/30' 
+                              : 'bg-card border-primary/20 shadow-sm'
+                        }`}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex items-start gap-3">
@@ -666,10 +724,10 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                               className="mt-1"
                             />
                             <div>
-                              <h4 className={`font-medium ${reminder.completed ? 'line-through text-muted-foreground' : ''}`}>
+                              <h4 className={`font-semibold text-sm ${reminder.completed ? 'line-through text-muted-foreground' : ''}`}>
                                 {reminder.title}
                               </h4>
-                              <p className={`text-sm ${reminder.completed ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>
+                              <p className={`text-sm text-muted-foreground ${reminder.completed ? 'text-muted-foreground/70' : ''}`}>
                                 {reminder.description}
                               </p>
                             </div>
@@ -677,7 +735,7 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            className="h-7 w-7 hover:bg-destructive/10 hover:text-destructive"
                             onClick={() => deleteReminder(reminder.id)}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -700,9 +758,11 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <CalendarIcon className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                    <p>No plant care reminders</p>
+                  <div className="text-center py-16">
+                    <div className="p-4 bg-muted/30 rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                      <CalendarIcon className="h-10 w-10 text-muted-foreground/50" />
+                    </div>
+                    <h3 className="font-medium mb-2">No plant care reminders</h3>
                     <Button onClick={createReminder} variant="link" size="sm">
                       Create your first reminder
                     </Button>
@@ -710,15 +770,18 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                 )}
               </ScrollArea>
             </CardContent>
-            <CardFooter className="flex justify-between pt-0">
-              <div className="text-sm text-muted-foreground">
-                {reminders.filter(r => !r.completed).length} active reminders
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {reminders.filter(r => r.completed).length} completed
+            
+            <CardFooter className="bg-muted/20 rounded-b-lg">
+              <div className="flex justify-between items-center w-full text-sm text-muted-foreground">
+                <span>{reminders.filter(r => !r.completed).length} active reminders</span>
+                <span>{reminders.filter(r => r.completed).length} completed</span>
               </div>
             </CardFooter>
           </Card>
+        </TabsContent>
+        
+        <TabsContent value="settings">
+          <NotificationSettings />
         </TabsContent>
       </Tabs>
     </div>
