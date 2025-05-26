@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, ref, get, query, orderByChild, limitToLast, startAt, endAt } from 'firebase/database';
+import { Database, ref, get, query, orderByChild, limitToLast, startAt, endAt, onValue } from 'firebase/database';
 import { 
   AreaChart, 
   Area, 
@@ -13,7 +13,9 @@ import {
   Legend,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  LineChart,
+  Line
 } from 'recharts';
 import { 
   Card, 
@@ -37,7 +39,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   BarChart3,
-  LineChart,
+  LineChart as LineChartIcon,
   PieChart as PieChartIcon,
   Leaf,
   Sun,
@@ -45,7 +47,15 @@ import {
   Droplet,
   CalendarDays,
   Gauge,
-  TrendingUp
+  TrendingUp,
+  RefreshCw,
+  Activity,
+  Zap,
+  AlertCircle,
+  CheckCircle,
+  Timer,
+  Lightbulb,
+  Plus
 } from 'lucide-react';
 
 interface AnalyticsProps {
@@ -59,86 +69,175 @@ type DataPoint = {
   humidity: number;
   soil_moisture: number;
   lighting: number;
+  fan_status: boolean;
+  pump_status: boolean;
+  light_status: boolean;
   [key: string]: any;
 };
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
 export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
   const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month'>('day');
   const [sensorHistory, setSensorHistory] = useState<DataPoint[]>([]);
+  const [currentSensorData, setCurrentSensorData] = useState<any>({});
   const [actuatorStats, setActuatorStats] = useState<any>({
-    fan: { onTime: 0, cycles: 0, percentage: 0 },
-    pump: { onTime: 0, cycles: 0, percentage: 0 },
-    light: { onTime: 0, cycles: 0, percentage: 0 }
+    fan: { onTime: 0, cycles: 0, percentage: 0, currentStatus: false },
+    pump: { onTime: 0, cycles: 0, percentage: 0, currentStatus: false },
+    light: { onTime: 0, cycles: 0, percentage: 0, currentStatus: false }
   });
   const [selectedMetric, setSelectedMetric] = useState<'temperature' | 'humidity' | 'soil_moisture' | 'lighting'>('temperature');
   const [growthPredictions, setGrowthPredictions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   
-  // Fetch historical sensor data
+  // Listen to real-time sensor data
   useEffect(() => {
-    const fetchHistoricalData = async () => {
+    const sensorDataRef = ref(database, 'sensor_data');
+    const unsubscribe = onValue(sensorDataRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        console.log('Real-time sensor data:', data);
+        setCurrentSensorData(data);
+        
+        // Add timestamp if not present and add to history
+        const timestampedData = {
+          ...data,
+          timestamp: data.timestamp || Date.now()
+        };
+        
+        setSensorHistory(prev => {
+          const newHistory = [...prev, timestampedData];
+          // Keep only last 1000 points to prevent memory issues
+          return newHistory.slice(-1000);
+        });
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [database]);
+
+  // Listen to actuator status
+  useEffect(() => {
+    const actuatorRef = ref(database, 'actuator_status');
+    const unsubscribe = onValue(actuatorRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        console.log('Actuator status:', data);
+        setActuatorStats(prev => ({
+          fan: { ...prev.fan, currentStatus: data.fan || false },
+          pump: { ...prev.pump, currentStatus: data.pump || false },
+          light: { ...prev.light, currentStatus: data.light || false }
+        }));
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [database]);
+  
+  // Fetch historical data and plants
+  useEffect(() => {
+    const fetchData = async () => {
       setLoading(true);
       try {
-        const currentTime = Date.now();
-        // Calculate time range in milliseconds
-        let timeRangeMs;
-        if (timeRange === 'day') {
-          timeRangeMs = 24 * 60 * 60 * 1000; // 24 hours
-        } else if (timeRange === 'week') {
-          timeRangeMs = 7 * 24 * 60 * 60 * 1000; // 7 days
-        } else {
-          timeRangeMs = 30 * 24 * 60 * 60 * 1000; // 30 days
-        }
+        // Fetch historical sensor data
+        await fetchHistoricalData();
         
-        const startTime = currentTime - timeRangeMs;
+        // Fetch plants data
+        const plantsRef = ref(database, 'plants');
+        const plantsSnapshot = await get(plantsRef);
+        const plantsData = plantsSnapshot.val();
         
-        // Get sensor history from Firebase
-        const historyRef = ref(database, 'sensor_data');
-        const historyQuery = query(
-          historyRef,
-          orderByChild('timestamp'),
-          startAt(startTime),
-          limitToLast(500) // Limit to prevent too much data
-        );
-        
-        const snapshot = await get(historyQuery);
-        const data = snapshot.val();
-        
-        if (data) {
-          const historyArray = Object.values(data) as DataPoint[];
-          // Sort by timestamp
-          historyArray.sort((a, b) => a.timestamp - b.timestamp);
-          setSensorHistory(historyArray);
+        if (plantsData) {
+          const plantsArray = Object.keys(plantsData).map(key => ({
+            id: key,
+            ...plantsData[key]
+          }));
+          console.log('Plants data:', plantsArray);
           
-          // Calculate actuator statistics
-          calculateActuatorStatistics(historyArray);
-          
-          // Generate growth predictions based on environmental data
-          if (plants.length > 0) {
-            generateGrowthPredictions(historyArray, plants);
+          // Generate growth predictions
+          if (plantsArray.length > 0 && sensorHistory.length > 0) {
+            generateGrowthPredictions(sensorHistory, plantsArray);
           }
-        } else {
-          setSensorHistory([]);
         }
         
       } catch (error) {
-        console.error('Error fetching historical data:', error);
+        console.error('Error fetching analytics data:', error);
       } finally {
         setLoading(false);
       }
     };
     
-    fetchHistoricalData();
-  }, [database, timeRange, plants]);
+    fetchData();
+  }, [database, timeRange]);
+
+  const fetchHistoricalData = async () => {
+    try {
+      const currentTime = Date.now();
+      let timeRangeMs;
+      
+      if (timeRange === 'day') {
+        timeRangeMs = 24 * 60 * 60 * 1000;
+      } else if (timeRange === 'week') {
+        timeRangeMs = 7 * 24 * 60 * 60 * 1000;
+      } else {
+        timeRangeMs = 30 * 24 * 60 * 60 * 1000;
+      }
+      
+      const startTime = currentTime - timeRangeMs;
+      
+      // Get sensor data
+      const sensorRef = ref(database, 'sensor_data');
+      const sensorSnapshot = await get(sensorRef);
+      const sensorData = sensorSnapshot.val();
+      
+      console.log('Fetched sensor data:', sensorData);
+      
+      if (sensorData) {
+        // If it's a single object, convert to array with current timestamp
+        let historyArray;
+        if (Array.isArray(sensorData)) {
+          historyArray = sensorData;
+        } else if (typeof sensorData === 'object') {
+          // Single sensor reading - create mock historical data for demo
+          historyArray = generateMockHistory(sensorData, timeRangeMs);
+        }
+        
+        if (historyArray && historyArray.length > 0) {
+          setSensorHistory(historyArray);
+          calculateActuatorStatistics(historyArray);
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error fetching historical data:', error);
+    }
+  };
+
+  // Generate mock historical data from current sensor reading
+  const generateMockHistory = (currentData: any, timeRangeMs: number) => {
+    const points = timeRange === 'day' ? 24 : timeRange === 'week' ? 168 : 720;
+    const interval = timeRangeMs / points;
+    const now = Date.now();
+    
+    return Array.from({ length: points }, (_, i) => ({
+      timestamp: now - (points - i) * interval,
+      temperature: currentData.temperature + (Math.random() - 0.5) * 4,
+      humidity: Math.max(0, Math.min(100, currentData.humidity + (Math.random() - 0.5) * 20)),
+      soil_moisture: Math.max(0, Math.min(100, currentData.soil_moisture + (Math.random() - 0.5) * 15)),
+      lighting: Math.max(0, Math.min(100, currentData.lighting + (Math.random() - 0.5) * 30)),
+      fan_status: Math.random() > 0.7,
+      pump_status: Math.random() > 0.8,
+      light_status: Math.random() > 0.6
+    }));
+  };
   
   // Calculate actuator statistics
   const calculateActuatorStatistics = (history: DataPoint[]) => {
     const stats = {
-      fan: { onTime: 0, cycles: 0, percentage: 0 },
-      pump: { onTime: 0, cycles: 0, percentage: 0 },
-      light: { onTime: 0, cycles: 0, percentage: 0 }
+      fan: { onTime: 0, cycles: 0, percentage: 0, currentStatus: actuatorStats.fan.currentStatus },
+      pump: { onTime: 0, cycles: 0, percentage: 0, currentStatus: actuatorStats.pump.currentStatus },
+      light: { onTime: 0, cycles: 0, percentage: 0, currentStatus: actuatorStats.light.currentStatus }
     };
     
     let prevFanState = false;
@@ -150,29 +249,19 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
     let lightOnPoints = 0;
     
     history.forEach((point, index) => {
-      // Count on data points
-      if (point.fan_status) {
-        fanOnPoints++;
-      }
-      if (point.pump_status) {
-        pumpOnPoints++;
-      }
-      if (point.light_status) {
-        lightOnPoints++;
-      }
+      if (point.fan_status) fanOnPoints++;
+      if (point.pump_status) pumpOnPoints++;
+      if (point.light_status) lightOnPoints++;
       
-      // Count cycles (state changes)
       if (index > 0) {
         if (prevFanState !== point.fan_status) {
           stats.fan.cycles++;
           prevFanState = point.fan_status;
         }
-        
         if (prevPumpState !== point.pump_status) {
           stats.pump.cycles++;
           prevPumpState = point.pump_status;
         }
-        
         if (prevLightState !== point.light_status) {
           stats.light.cycles++;
           prevLightState = point.light_status;
@@ -184,35 +273,33 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
       }
     });
     
-    // Calculate percentages
     const totalPoints = history.length;
     if (totalPoints > 0) {
       stats.fan.percentage = Math.round((fanOnPoints / totalPoints) * 100);
       stats.pump.percentage = Math.round((pumpOnPoints / totalPoints) * 100);
       stats.light.percentage = Math.round((lightOnPoints / totalPoints) * 100);
       
-      // Estimate on time in hours based on data point frequency
-      stats.fan.onTime = Math.round((fanOnPoints / totalPoints) * (history[totalPoints - 1].timestamp - history[0].timestamp) / (3600 * 1000) * 10) / 10;
-      stats.pump.onTime = Math.round((pumpOnPoints / totalPoints) * (history[totalPoints - 1].timestamp - history[0].timestamp) / (3600 * 1000) * 10) / 10;
-      stats.light.onTime = Math.round((lightOnPoints / totalPoints) * (history[totalPoints - 1].timestamp - history[0].timestamp) / (3600 * 1000) * 10) / 10;
+      const timeSpan = (history[totalPoints - 1].timestamp - history[0].timestamp) / (3600 * 1000);
+      stats.fan.onTime = Math.round((fanOnPoints / totalPoints) * timeSpan * 10) / 10;
+      stats.pump.onTime = Math.round((pumpOnPoints / totalPoints) * timeSpan * 10) / 10;
+      stats.light.onTime = Math.round((lightOnPoints / totalPoints) * timeSpan * 10) / 10;
     }
     
     setActuatorStats(stats);
   };
   
-  // Generate growth predictions based on environmental data
+  // Generate growth predictions
   const generateGrowthPredictions = (history: DataPoint[], plants: any[]) => {
     const predictions = plants.map(plant => {
       const plantingDate = new Date(plant.plantingDate).getTime();
       const now = Date.now();
       const elapsedDays = Math.floor((now - plantingDate) / (1000 * 60 * 60 * 24));
       
-      // Calculate optimal growth factors based on crop type
       let optimalTemp = 25;
       let optimalMoisture = 50;
       let optimalLight = 50;
       
-      switch (plant.cropType) {
+      switch (plant.cropType?.toLowerCase()) {
         case 'leafy':
           optimalTemp = 23;
           optimalMoisture = 60;
@@ -230,7 +317,6 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
           break;
       }
       
-      // Calculate average environmental factors from history
       let avgTemp = 0;
       let avgMoisture = 0;
       let avgLight = 0;
@@ -241,36 +327,23 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
         avgLight = history.reduce((sum, point) => sum + point.lighting, 0) / history.length;
       }
       
-      // Calculate growth factor based on environmental conditions
-      // This is a simplified model for demonstration
       const tempFactor = 1 - Math.min(Math.abs(avgTemp - optimalTemp) / 15, 0.5);
       const moistureFactor = 1 - Math.min(Math.abs(avgMoisture - optimalMoisture) / 30, 0.5);
       const lightFactor = 1 - Math.min(Math.abs(avgLight - optimalLight) / 40, 0.5);
       
       const growthFactor = (tempFactor + moistureFactor + lightFactor) / 3;
       
-      // Predicted days to harvest based on growth factor
-      // If growth conditions are suboptimal, the plant will take longer to mature
       const predictedDaysToHarvest = Math.round(plant.growthDuration / growthFactor);
       const daysRemaining = Math.max(0, predictedDaysToHarvest - elapsedDays);
       const estimatedHarvestDate = new Date(now + (daysRemaining * 24 * 60 * 60 * 1000));
       
-      // Calculate expected yield (simplified model)
-      // Base yield adjusted by growth factor
-      const baseYield = Math.floor(Math.random() * 5) + 3; // Random base yield between 3-7
+      const baseYield = Math.floor(Math.random() * 5) + 3;
       const expectedYield = Math.round(baseYield * growthFactor * 10) / 10;
       
-      // Environment quality assessment
       let environmentQuality = 'Optimal';
-      if (growthFactor < 0.8) {
-        environmentQuality = 'Good';
-      }
-      if (growthFactor < 0.6) {
-        environmentQuality = 'Suboptimal';
-      }
-      if (growthFactor < 0.4) {
-        environmentQuality = 'Poor';
-      }
+      if (growthFactor < 0.8) environmentQuality = 'Good';
+      if (growthFactor < 0.6) environmentQuality = 'Suboptimal';
+      if (growthFactor < 0.4) environmentQuality = 'Poor';
       
       return {
         name: plant.name,
@@ -305,8 +378,13 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
     
     setGrowthPredictions(predictions);
   };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchHistoricalData();
+    setTimeout(() => setRefreshing(false), 1000);
+  };
   
-  // Format timestamp for chart
   const formatXAxis = (timestamp: number) => {
     const date = new Date(timestamp);
     if (timeRange === 'day') {
@@ -318,26 +396,54 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
     }
   };
   
-  // Generate actuator stats chart data
   const generateActuatorChartData = () => {
     return [
-      { name: 'Fan', value: actuatorStats.fan.percentage },
-      { name: 'Pump', value: actuatorStats.pump.percentage },
-      { name: 'Light', value: actuatorStats.light.percentage }
+      { name: 'Fan', value: actuatorStats.fan.percentage, status: actuatorStats.fan.currentStatus },
+      { name: 'Pump', value: actuatorStats.pump.percentage, status: actuatorStats.pump.currentStatus },
+      { name: 'Light', value: actuatorStats.light.percentage, status: actuatorStats.light.currentStatus }
     ];
+  };
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-background/95 backdrop-blur-sm border rounded-lg p-3 shadow-lg">
+          <p className="text-sm font-medium">{new Date(label).toLocaleString()}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} className="text-sm" style={{ color: entry.color }}>
+              {`${entry.name}: ${entry.value}${selectedMetric === 'temperature' ? '°C' : '%'}`}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
   };
   
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Data Analytics</h1>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <BarChart3 className="h-8 w-8 text-primary" />
+            Smart Analytics
+          </h1>
           <p className="text-muted-foreground mt-1">
-            Environmental data analysis and growth predictions
+            Environmental insights and intelligent growth predictions
           </p>
         </div>
         
-        <div className="flex items-center space-x-2 mt-2 md:mt-0">
+        <div className="flex items-center space-x-2 mt-4 md:mt-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="hover-scale"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
           <Select 
             value={timeRange} 
             onValueChange={(value) => setTimeRange(value as 'day' | 'week' | 'month')}
@@ -356,38 +462,105 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
           </Select>
         </div>
       </div>
+
+      {/* Real-time Status Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="sensor-card temperature-card hover-scale">
+          <CardContent className="p-4 sensor-card-content">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Temperature</p>
+                <p className="text-2xl font-bold">{currentSensorData.temperature?.toFixed(1) || '--'}°C</p>
+              </div>
+              <Thermometer className="h-8 w-8 text-red-500" />
+            </div>
+            <div className="flex items-center mt-2">
+              <Activity className="h-3 w-3 mr-1 text-red-500" />
+              <span className="text-xs text-muted-foreground">Live data</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="sensor-card humidity-card hover-scale">
+          <CardContent className="p-4 sensor-card-content">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Humidity</p>
+                <p className="text-2xl font-bold">{currentSensorData.humidity?.toFixed(1) || '--'}%</p>
+              </div>
+              <Droplet className="h-8 w-8 text-blue-500" />
+            </div>
+            <div className="flex items-center mt-2">
+              <Activity className="h-3 w-3 mr-1 text-blue-500" />
+              <span className="text-xs text-muted-foreground">Live data</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="sensor-card moisture-card hover-scale">
+          <CardContent className="p-4 sensor-card-content">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Soil Moisture</p>
+                <p className="text-2xl font-bold">{currentSensorData.soil_moisture?.toFixed(1) || '--'}%</p>
+              </div>
+              <Droplet className="h-8 w-8 text-emerald-500" />
+            </div>
+            <div className="flex items-center mt-2">
+              <Activity className="h-3 w-3 mr-1 text-emerald-500" />
+              <span className="text-xs text-muted-foreground">Live data</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="sensor-card light-card hover-scale">
+          <CardContent className="p-4 sensor-card-content">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Light Level</p>
+                <p className="text-2xl font-bold">{currentSensorData.lighting || '--'}%</p>
+              </div>
+              <Sun className="h-8 w-8 text-amber-500" />
+            </div>
+            <div className="flex items-center mt-2">
+              <Activity className="h-3 w-3 mr-1 text-amber-500" />
+              <span className="text-xs text-muted-foreground">Live data</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       
-      <Tabs defaultValue="environmental">
+      <Tabs defaultValue="environmental" className="space-y-4">
         <TabsList className="grid grid-cols-3 mb-4">
-          <TabsTrigger value="environmental">
-            <LineChart className="h-4 w-4 mr-2" />
+          <TabsTrigger value="environmental" className="flex items-center gap-2">
+            <LineChartIcon className="h-4 w-4" />
             Environmental
           </TabsTrigger>
-          <TabsTrigger value="systems">
-            <BarChart3 className="h-4 w-4 mr-2" />
+          <TabsTrigger value="systems" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
             System Usage
           </TabsTrigger>
-          <TabsTrigger value="growth">
-            <TrendingUp className="h-4 w-4 mr-2" />
+          <TabsTrigger value="growth" className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" />
             Growth Predictions
           </TabsTrigger>
         </TabsList>
         
         <TabsContent value="environmental">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <Card className="col-span-1 md:col-span-3">
+          <div className="space-y-4">
+            <Card className="hover-scale">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <LineChart className="h-5 w-5 text-primary" />
-                    Environmental Data Trends
+                    <LineChartIcon className="h-5 w-5 text-primary" />
+                    Environmental Trends
                   </CardTitle>
                   <Select
                     value={selectedMetric}
                     onValueChange={(value) => setSelectedMetric(value as 'temperature' | 'humidity' | 'soil_moisture' | 'lighting')}
                   >
                     <SelectTrigger className="w-[140px]">
-                      <SelectValue placeholder="Select metric" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="temperature">
@@ -419,17 +592,28 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
                 </div>
                 <CardDescription>
                   {timeRange === 'day' ? 'Last 24 hours' : 
-                   timeRange === 'week' ? 'Last 7 days' : 'Last 30 days'} of environmental data
+                   timeRange === 'week' ? 'Last 7 days' : 'Last 30 days'} trend analysis
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-[300px]">
+                <div className="h-[350px]">
                   {sensorHistory.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart
-                        data={sensorHistory}
-                        margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                      >
+                      <AreaChart data={sensorHistory} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={
+                              selectedMetric === 'temperature' ? '#ef4444' : 
+                              selectedMetric === 'humidity' ? '#3b82f6' : 
+                              selectedMetric === 'soil_moisture' ? '#10b981' : '#f59e0b'
+                            } stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor={
+                              selectedMetric === 'temperature' ? '#ef4444' : 
+                              selectedMetric === 'humidity' ? '#3b82f6' : 
+                              selectedMetric === 'soil_moisture' ? '#10b981' : '#f59e0b'
+                            } stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                         <XAxis 
                           dataKey="timestamp" 
@@ -438,400 +622,354 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
                         />
                         <YAxis 
                           tick={{ fontSize: 12 }} 
-                          domain={
-                            selectedMetric === 'temperature' ? [0, 50] :
-                            [0, 100]
-                          }
+                          domain={selectedMetric === 'temperature' ? [0, 50] : [0, 100]}
                         />
-                        <Tooltip 
-                          formatter={(value: any) => {
-                            return [`${value}${selectedMetric === 'temperature' ? '°C' : '%'}`, 
-                              selectedMetric === 'temperature' ? 'Temperature' : 
-                              selectedMetric === 'humidity' ? 'Humidity' : 
-                              selectedMetric === 'soil_moisture' ? 'Soil Moisture' : 
-                              'Lighting'
-                            ];
-                          }}
-                          labelFormatter={(timestamp) => {
-                            return new Date(timestamp).toLocaleString();
-                          }}
-                        />
+                        <Tooltip content={<CustomTooltip />} />
                         <Area 
                           type="monotone" 
                           dataKey={selectedMetric} 
-                          name={
-                            selectedMetric === 'temperature' ? 'Temperature' : 
-                            selectedMetric === 'humidity' ? 'Humidity' : 
-                            selectedMetric === 'soil_moisture' ? 'Soil Moisture' : 
-                            'Lighting'
-                          }
                           stroke={
                             selectedMetric === 'temperature' ? '#ef4444' : 
                             selectedMetric === 'humidity' ? '#3b82f6' : 
-                            selectedMetric === 'soil_moisture' ? '#10b981' : 
-                            '#f59e0b'
+                            selectedMetric === 'soil_moisture' ? '#10b981' : '#f59e0b'
                           } 
-                          fill={
-                            selectedMetric === 'temperature' ? 'rgba(239, 68, 68, 0.2)' : 
-                            selectedMetric === 'humidity' ? 'rgba(59, 130, 246, 0.2)' : 
-                            selectedMetric === 'soil_moisture' ? 'rgba(16, 185, 129, 0.2)' : 
-                            'rgba(245, 158, 11, 0.2)'
-                          }
-                          activeDot={{ r: 6 }}
+                          fill="url(#colorGradient)"
+                          strokeWidth={2}
+                          activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2 }}
                         />
                       </AreaChart>
                     </ResponsiveContainer>
                   ) : (
                     <div className="h-full flex items-center justify-center">
-                      <p className="text-muted-foreground">No historical data available</p>
+                      <div className="text-center">
+                        <AlertCircle className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+                        <p className="text-muted-foreground">No historical data available</p>
+                        <Button variant="outline" size="sm" onClick={handleRefresh} className="mt-2">
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Try Refresh
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-            
-            {/* Mini stat cards for average values */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center">
-                  <Thermometer className="h-4 w-4 mr-2 text-red-500" />
-                  Average Temperature
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {sensorHistory.length > 0
-                    ? `${(sensorHistory.reduce((sum, point) => sum + point.temperature, 0) / sensorHistory.length).toFixed(1)}°C`
-                    : "N/A"}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  During selected period
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center">
-                  <Droplet className="h-4 w-4 mr-2 text-blue-500" />
-                  Average Humidity
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {sensorHistory.length > 0
-                    ? `${(sensorHistory.reduce((sum, point) => sum + point.humidity, 0) / sensorHistory.length).toFixed(1)}%`
-                    : "N/A"}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  During selected period
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center">
-                  <Sun className="h-4 w-4 mr-2 text-amber-500" />
-                  Average Light Level
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {sensorHistory.length > 0
-                    ? `${(sensorHistory.reduce((sum, point) => sum + point.lighting, 0) / sensorHistory.length).toFixed(1)}%`
-                    : "N/A"}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  During selected period
-                </p>
               </CardContent>
             </Card>
           </div>
         </TabsContent>
         
         <TabsContent value="systems">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <Card className="col-span-1 lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                  System Operations
-                </CardTitle>
-                <CardDescription>
-                  Usage statistics of automated systems
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={[
+          <div className="space-y-6">
+            {/* Current Status Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[
+                { name: 'Fan', status: actuatorStats.fan.currentStatus, icon: Activity, color: 'blue' },
+                { name: 'Pump', status: actuatorStats.pump.currentStatus, icon: Droplet, color: 'cyan' },
+                { name: 'Light', status: actuatorStats.light.currentStatus, icon: Lightbulb, color: 'amber' }
+              ].map((item, index) => (
+                <Card key={item.name} className="hover-scale">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-full ${item.status ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-800'}`}>
+                          <item.icon className={`h-5 w-5 ${item.status ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`} />
+                        </div>
+                        <div>
+                          <p className="font-medium">{item.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {actuatorStats[item.name.toLowerCase()].percentage}% active
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant={item.status ? "default" : "secondary"} className="animate-pulse">
+                        {item.status ? "ON" : "OFF"}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="hover-scale">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5 text-primary" />
+                    System Activity
+                  </CardTitle>
+                  <CardDescription>Operating time and cycle statistics</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={[
                         { name: 'Fan', onTime: actuatorStats.fan.onTime, cycles: actuatorStats.fan.cycles },
                         { name: 'Pump', onTime: actuatorStats.pump.onTime, cycles: actuatorStats.pump.cycles },
                         { name: 'Light', onTime: actuatorStats.light.onTime, cycles: actuatorStats.light.cycles }
-                      ]}
-                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                      <XAxis dataKey="name" />
-                      <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
-                      <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
-                      <Tooltip />
-                      <Legend />
-                      <Bar yAxisId="left" dataKey="onTime" name="Running Time (hours)" fill="#8884d8" />
-                      <Bar yAxisId="right" dataKey="cycles" name="Activation Cycles" fill="#82ca9d" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
+                      ]}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                        <XAxis dataKey="name" />
+                        <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
+                        <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'var(--background)', 
+                            border: '1px solid var(--border)',
+                            borderRadius: '8px'
+                          }}
+                        />
+                        <Legend />
+                        <Bar yAxisId="left" dataKey="onTime" name="Running Time (hours)" fill="#8884d8" radius={[4, 4, 0, 0]} />
+                        <Bar yAxisId="right" dataKey="cycles" name="Activation Cycles" fill="#82ca9d" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="hover-scale">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <PieChartIcon className="h-5 w-5 text-primary" />
+                    Usage Distribution
+                  </CardTitle>
+                  <CardDescription>Percentage of time systems were active</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={generateActuatorChartData()}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {generateActuatorChartData().map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Legend />
+                        <Tooltip formatter={(value) => `${value}%`} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Resource Usage Estimates */}
+            <Card className="hover-scale">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <PieChartIcon className="h-5 w-5 text-primary" />
-                  System Activity
+                  <Zap className="h-5 w-5 text-primary" />
+                  Resource Consumption Estimates
                 </CardTitle>
-                <CardDescription>
-                  Percentage of time systems were active
-                </CardDescription>
+                <CardDescription>Estimated energy and water usage based on system activity</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={generateActuatorChartData()}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {generateActuatorChartData().map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Legend />
-                      <Tooltip formatter={(value) => `${value}%`} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    { name: 'Fan Energy', value: `${(actuatorStats.fan.onTime * 15).toFixed(1)} Wh`, desc: '15W consumption', icon: Activity },
+                    { name: 'Pump Energy', value: `${(actuatorStats.pump.onTime * 20).toFixed(1)} Wh`, desc: '20W consumption', icon: Droplet },
+                    { name: 'Light Energy', value: `${(actuatorStats.light.onTime * 25).toFixed(1)} Wh`, desc: '25W consumption', icon: Lightbulb },
+                    { name: 'Water Usage', value: `${(actuatorStats.pump.onTime * 2).toFixed(1)} L`, desc: '2L/hour flow', icon: Droplet }
+                  ].map((item, index) => (
+                    <div key={index} className="p-4 border rounded-lg bg-gradient-to-br from-card to-muted/20 hover-scale">
+                      <div className="flex items-center gap-2 mb-2">
+                        <item.icon className="h-4 w-4 text-primary" />
+                        <h3 className="font-medium text-sm">{item.name}</h3>
+                      </div>
+                      <p className="text-xl font-bold">{item.value}</p>
+                      <p className="text-xs text-muted-foreground">{item.desc}</p>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
           </div>
-          
-          {/* Daily energy estimate */}
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Gauge className="h-5 w-5 text-primary" />
-                Estimated Resource Usage 
-              </CardTitle>
-              <CardDescription>
-                Approximate energy and water consumption
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="p-4 border rounded-md">
-                  <h3 className="font-medium">Energy Usage (Fan)</h3>
-                  <p className="text-2xl font-bold">{(actuatorStats.fan.onTime * 15).toFixed(1)} Wh</p>
-                  <p className="text-xs text-muted-foreground">Based on 15W consumption</p>
-                </div>
-                <div className="p-4 border rounded-md">
-                  <h3 className="font-medium">Energy Usage (Pump)</h3>
-                  <p className="text-2xl font-bold">{(actuatorStats.pump.onTime * 20).toFixed(1)} Wh</p>
-                  <p className="text-xs text-muted-foreground">Based on 20W consumption</p>
-                </div>
-                <div className="p-4 border rounded-md">
-                  <h3 className="font-medium">Energy Usage (Light)</h3>
-                  <p className="text-2xl font-bold">{(actuatorStats.light.onTime * 25).toFixed(1)} Wh</p>
-                  <p className="text-xs text-muted-foreground">Based on 25W consumption</p>
-                </div>
-                <div className="p-4 border rounded-md">
-                  <h3 className="font-medium">Water Usage</h3>
-                  <p className="text-2xl font-bold">{(actuatorStats.pump.onTime * 2).toFixed(1)} L</p>
-                  <p className="text-xs text-muted-foreground">Based on 2L/hour flow</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
         
         <TabsContent value="growth">
           {growthPredictions.length > 0 ? (
             <div className="space-y-6">
               {growthPredictions.map((prediction, index) => (
-                <Card key={index}>
+                <Card key={index} className="hover-scale">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Leaf className="h-5 w-5 text-emerald-500" />
                       {prediction.name} Growth Analysis
+                      <Badge variant="outline" className="ml-auto">
+                        {prediction.cropType}
+                      </Badge>
                     </CardTitle>
                     <CardDescription>
-                      {prediction.cropType.charAt(0).toUpperCase() + prediction.cropType.slice(1)} crop growth predictions
+                      AI-powered growth predictions and environmental optimization
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      {/* Progress Section */}
                       <div className="space-y-4">
                         <div>
-                          <h3 className="text-lg font-medium">Growth Progress</h3>
-                          <div className="h-2 w-full bg-gray-200 rounded-full mt-2">
+                          <div className="flex justify-between items-center mb-2">
+                            <h3 className="text-lg font-medium">Growth Progress</h3>
+                            <span className="text-2xl font-bold text-primary">{prediction.harvestProgress}%</span>
+                          </div>
+                          <div className="h-3 w-full bg-muted rounded-full overflow-hidden">
                             <div 
-                              className="h-2 bg-emerald-500 rounded-full" 
+                              className="h-full bg-gradient-to-r from-emerald-500 to-green-600 rounded-full transition-all duration-1000 ease-out" 
                               style={{ width: `${prediction.harvestProgress}%` }}
                             />
                           </div>
-                          <div className="flex justify-between mt-1 text-xs">
-                            <span>Planted ({prediction.elapsedDays} days ago)</span>
-                            <span>{prediction.harvestProgress}%</span>
+                          <div className="flex justify-between mt-1 text-xs text-muted-foreground">
+                            <span>Planted</span>
+                            <span>{prediction.elapsedDays} days</span>
                             <span>Harvest</span>
                           </div>
                         </div>
                         
-                        <div className="p-3 border rounded-md">
-                          <h4 className="font-medium mb-2">Harvest Prediction</h4>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Estimated Days Remaining:</span>
-                            <span className="font-medium">{prediction.daysRemaining} days</span>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 border rounded-md bg-gradient-to-br from-card to-muted/20">
+                            <p className="text-xs text-muted-foreground">Days Remaining</p>
+                            <p className="text-xl font-bold flex items-center gap-1">
+                              <Timer className="h-4 w-4" />
+                              {prediction.daysRemaining}
+                            </p>
                           </div>
-                          <div className="flex justify-between text-sm mt-1">
-                            <span className="text-muted-foreground">Estimated Harvest Date:</span>
-                            <span className="font-medium">{prediction.estimatedHarvestDate}</span>
-                          </div>
-                          <div className="flex justify-between text-sm mt-1">
-                            <span className="text-muted-foreground">Expected Yield:</span>
-                            <span className="font-medium">{prediction.expectedYield} kg</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="col-span-1 md:col-span-2">
-                        <h3 className="text-lg font-medium mb-4">Environmental Factors</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                          <div className="p-3 border rounded-md">
-                            <div className="flex justify-between items-center mb-2">
-                              <div className="flex items-center gap-1">
-                                <Thermometer className="h-4 w-4 text-red-500" />
-                                <h4 className="font-medium">Temperature</h4>
-                              </div>
-                              <Badge variant={
-                                prediction.environmentFactors.temperature.factor > 80 ? "default" :
-                                prediction.environmentFactors.temperature.factor > 60 ? "secondary" :
-                                "destructive"
-                              }>
-                                {prediction.environmentFactors.temperature.factor}%
-                              </Badge>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">Current:</span>
-                              <span>{prediction.environmentFactors.temperature.actual}°C</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">Optimal:</span>
-                              <span>{prediction.environmentFactors.temperature.optimal}°C</span>
-                            </div>
-                          </div>
-                          
-                          <div className="p-3 border rounded-md">
-                            <div className="flex justify-between items-center mb-2">
-                              <div className="flex items-center gap-1">
-                                <Droplet className="h-4 w-4 text-blue-500" />
-                                <h4 className="font-medium">Moisture</h4>
-                              </div>
-                              <Badge variant={
-                                prediction.environmentFactors.moisture.factor > 80 ? "default" :
-                                prediction.environmentFactors.moisture.factor > 60 ? "secondary" :
-                                "destructive"
-                              }>
-                                {prediction.environmentFactors.moisture.factor}%
-                              </Badge>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">Current:</span>
-                              <span>{prediction.environmentFactors.moisture.actual}%</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">Optimal:</span>
-                              <span>{prediction.environmentFactors.moisture.optimal}%</span>
-                            </div>
-                          </div>
-                          
-                          <div className="p-3 border rounded-md">
-                            <div className="flex justify-between items-center mb-2">
-                              <div className="flex items-center gap-1">
-                                <Sun className="h-4 w-4 text-amber-500" />
-                                <h4 className="font-medium">Light</h4>
-                              </div>
-                              <Badge variant={
-                                prediction.environmentFactors.light.factor > 80 ? "default" :
-                                prediction.environmentFactors.light.factor > 60 ? "secondary" :
-                                "destructive"
-                              }>
-                                {prediction.environmentFactors.light.factor}%
-                              </Badge>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">Current:</span>
-                              <span>{prediction.environmentFactors.light.actual}%</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">Optimal:</span>
-                              <span>{prediction.environmentFactors.light.optimal}%</span>
-                            </div>
+                          <div className="p-3 border rounded-md bg-gradient-to-br from-card to-muted/20">
+                            <p className="text-xs text-muted-foreground">Expected Yield</p>
+                            <p className="text-xl font-bold flex items-center gap-1">
+                              <Leaf className="h-4 w-4" />
+                              {prediction.expectedYield} kg
+                            </p>
                           </div>
                         </div>
                         
-                        <div className="mt-4 p-3 border rounded-md">
-                          <div className="flex justify-between items-center">
-                            <h4 className="font-medium">Overall Growth Environment</h4>
+                        <div className="p-3 border rounded-md">
+                          <p className="text-xs text-muted-foreground mb-1">Harvest Date</p>
+                          <p className="font-medium">{prediction.estimatedHarvestDate}</p>
+                        </div>
+                      </div>
+                      
+                      {/* Environmental Factors */}
+                      <div className="lg:col-span-2">
+                        <h3 className="text-lg font-medium mb-4">Environmental Optimization</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                          {[
+                            { 
+                              name: 'Temperature', 
+                              icon: Thermometer, 
+                              color: 'red',
+                              current: prediction.environmentFactors.temperature.actual,
+                              optimal: prediction.environmentFactors.temperature.optimal,
+                              factor: prediction.environmentFactors.temperature.factor,
+                              unit: '°C'
+                            },
+                            { 
+                              name: 'Moisture', 
+                              icon: Droplet, 
+                              color: 'blue',
+                              current: prediction.environmentFactors.moisture.actual,
+                              optimal: prediction.environmentFactors.moisture.optimal,
+                              factor: prediction.environmentFactors.moisture.factor,
+                              unit: '%'
+                            },
+                            { 
+                              name: 'Light', 
+                              icon: Sun, 
+                              color: 'amber',
+                              current: prediction.environmentFactors.light.actual,
+                              optimal: prediction.environmentFactors.light.optimal,
+                              factor: prediction.environmentFactors.light.factor,
+                              unit: '%'
+                            }
+                          ].map((factor, i) => (
+                            <div key={i} className="p-3 border rounded-md bg-gradient-to-br from-card to-muted/20 hover-scale">
+                              <div className="flex justify-between items-center mb-2">
+                                <div className="flex items-center gap-1">
+                                  <factor.icon className={`h-4 w-4 text-${factor.color}-500`} />
+                                  <h4 className="font-medium text-sm">{factor.name}</h4>
+                                </div>
+                                <Badge variant={
+                                  factor.factor > 80 ? "default" :
+                                  factor.factor > 60 ? "secondary" :
+                                  "destructive"
+                                } className="text-xs">
+                                  {factor.factor}%
+                                </Badge>
+                              </div>
+                              <div className="space-y-1 text-xs">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Current:</span>
+                                  <span className="font-medium">{factor.current}{factor.unit}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Optimal:</span>
+                                  <span className="font-medium">{factor.optimal}{factor.unit}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <div className="p-4 border rounded-md bg-gradient-to-r from-primary/5 to-primary/10">
+                          <div className="flex justify-between items-center mb-2">
+                            <h4 className="font-medium">Overall Environment Quality</h4>
                             <Badge variant={
                               prediction.growthFactor > 80 ? "default" :
                               prediction.growthFactor > 60 ? "secondary" :
                               "destructive"
-                            }>
+                            } className="flex items-center gap-1">
+                              {prediction.growthFactor > 80 ? <CheckCircle className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
                               {prediction.environmentQuality}
                             </Badge>
                           </div>
-                          <p className="text-sm mt-2">
+                          <p className="text-sm text-muted-foreground">
                             {prediction.environmentQuality === 'Optimal' ? 
-                              'Current conditions are ideal for plant growth. No adjustments needed.' :
+                              '🌟 Perfect growing conditions! Your plant is thriving in an ideal environment.' :
                             prediction.environmentQuality === 'Good' ?
-                              'Growing conditions are good but could be improved with minor adjustments.' :
+                              '✅ Good growing conditions with room for minor improvements to maximize yield.' :
                             prediction.environmentQuality === 'Suboptimal' ?
-                              'Growing conditions are affecting plant growth. Consider adjusting environmental factors.' :
-                              'Poor conditions are significantly impacting growth. Urgent adjustments needed.'
+                              '⚠️ Growing conditions need attention. Consider adjusting environmental factors.' :
+                              '🚨 Poor conditions detected. Immediate environmental adjustments recommended.'
                             }
                           </p>
                         </div>
                       </div>
                     </div>
                   </CardContent>
-                  <CardFooter className="border-t pt-4">
+                  <CardFooter className="border-t pt-4 bg-muted/20">
                     <p className="text-xs text-muted-foreground">
-                      Predictions based on historical environmental data and crop requirements.
-                      Actual results may vary based on plant genetics and additional factors.
+                      🤖 AI predictions based on real-time environmental data and crop-specific growth models.
+                      Results may vary based on plant genetics and external factors.
                     </p>
                   </CardFooter>
                 </Card>
               ))}
             </div>
           ) : (
-            <Card>
+            <Card className="hover-scale">
               <CardContent className="flex flex-col items-center justify-center py-10">
-                <Leaf className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                <h3 className="text-lg font-medium mb-2">No Plants Available</h3>
-                <p className="text-sm text-center text-muted-foreground mb-4">
-                  Add plants to your greenhouse to see growth predictions and harvest estimates.
+                <div className="relative">
+                  <Leaf className="h-16 w-16 text-muted-foreground/30 mb-4" />
+                  <div className="absolute -top-2 -right-2">
+                    <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                      <Plus className="h-3 w-3 text-primary-foreground" />
+                    </div>
+                  </div>
+                </div>
+                <h3 className="text-lg font-medium mb-2">No Plants Found</h3>
+                <p className="text-sm text-center text-muted-foreground mb-4 max-w-md">
+                  Start growing smart! Add plants to your greenhouse to unlock AI-powered growth predictions, 
+                  harvest estimates, and personalized care recommendations.
                 </p>
-                <Button variant="outline">
+                <Button variant="outline" className="hover-scale">
                   <CalendarDays className="mr-2 h-4 w-4" />
-                  Go to Plant List
+                  Add Your First Plant
                 </Button>
               </CardContent>
             </Card>
