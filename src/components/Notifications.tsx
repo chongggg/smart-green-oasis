@@ -3,22 +3,13 @@ import { Database, ref, onValue, set, push, remove } from 'firebase/database';
 import { 
   BellRing, 
   Calendar as CalendarIcon, 
-  AlertTriangle, 
-  CheckCircle, 
-  Clock, 
-  Trash2,
   Bell,
   CheckCheck,
   PlusCircle,
-  Eye,
-  EyeOff,
-  Save,
-  ArrowDownUp,
-  Settings,
-  Mail,
-  Send
+  Send,
+  Settings
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -26,33 +17,14 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
-import { 
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Calendar } from '@/components/ui/calendar';
+import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import { notificationService } from '@/services/notificationService';
 import { NotificationSettings } from '@/components/NotificationSettings';
+import { NotificationFilters } from '@/components/notifications/NotificationFilters';
+import { NotificationCard } from '@/components/notifications/NotificationCard';
+import { ReminderCard } from '@/components/notifications/ReminderCard';
+import { CreateReminderDialog } from '@/components/notifications/CreateReminderDialog';
 
 export type NotificationType = 'warning' | 'info' | 'success';
 
@@ -90,12 +62,13 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [activeTab, setActiveTab] = useState('alerts');
   
-  // New state for notifications management
+  // State for notifications management
   const [showRead, setShowRead] = useState(false);
   const [sortNewest, setSortNewest] = useState(true);
   const [filteredType, setFilteredType] = useState<NotificationType | 'all'>('all');
   
-  // New state for reminder creation
+  // State for reminder creation
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newReminder, setNewReminder] = useState<{
     title: string;
     description: string;
@@ -103,7 +76,7 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
   }>({
     title: '',
     description: '',
-    dueDate: new Date(Date.now() + (24 * 60 * 60 * 1000)), // Tomorrow
+    dueDate: new Date(Date.now() + (24 * 60 * 60 * 1000)),
   });
   
   // Fetch notifications from Firebase
@@ -171,7 +144,7 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sensorData, notificationsEnabled]);
   
-  // Create a new system alert
+  // Create a new system alert with proper external notifications
   const createSystemAlert = async (title: string, message: string, type: NotificationType) => {
     // Check if a similar notification was created in the last hour to avoid spamming
     const oneHourAgo = Date.now() - (60 * 60 * 1000);
@@ -191,29 +164,68 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
       const notificationsRef = ref(database, 'notifications');
       push(notificationsRef, newNotification);
       
-      // Send external notifications (email/SMS)
+      // Send external notifications (email/SMS) with proper error handling
       try {
+        console.log('Sending external notification:', { title, message, type });
         await notificationService.sendNotification(title, message, 'alert');
+        
+        toast({
+          title: 'Alert Sent',
+          description: `${title} - External notifications sent successfully`,
+          variant: type === 'warning' ? 'destructive' : 'default',
+        });
       } catch (error) {
         console.error('Failed to send external notification:', error);
+        toast({
+          title: title,
+          description: `${message} (Note: External notifications may have failed)`,
+          variant: type === 'warning' ? 'destructive' : 'default',
+        });
       }
+    }
+  };
+
+  // Enhanced test notification with better error handling
+  const sendTestNotification = async () => {
+    try {
+      console.log('Sending test notification...');
+      
+      // Create a test alert in the system
+      await createSystemAlert(
+        'Test Notification', 
+        'This is a test notification from your Smart Greenhouse system.', 
+        'info'
+      );
+      
+      // Also send direct external notification to ensure it works
+      await notificationService.sendNotification(
+        'Test Notification',
+        'This is a test notification from your Smart Greenhouse system.',
+        'alert'
+      );
       
       toast({
-        title: title,
-        description: message,
-        variant: type === 'warning' ? 'destructive' : 'default',
+        title: 'Test Sent Successfully',
+        description: 'Check your enabled notification methods (email/SMS) for the test message'
+      });
+    } catch (error) {
+      console.error('Test notification failed:', error);
+      toast({
+        title: 'Test Failed',
+        description: 'There was an error sending the test notification. Please check your notification settings.',
+        variant: 'destructive'
       });
     }
   };
 
   // Create a new reminder
   const createReminder = () => {
-    // Open in dialog mode now
     setNewReminder({
       title: 'New Plant Care Task',
       description: 'Add description for your plant care task',
-      dueDate: new Date(Date.now() + (24 * 60 * 60 * 1000)), // Default: tomorrow
+      dueDate: new Date(Date.now() + (24 * 60 * 60 * 1000)),
     });
+    setShowCreateDialog(true);
   };
   
   // Enhanced reminder creation with notifications
@@ -244,12 +256,13 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
       description: 'A new plant care reminder has been added and notification sent'
     });
     
-    // Reset form
+    // Reset form and close dialog
     setNewReminder({
       title: '',
       description: '',
       dueDate: new Date(Date.now() + (24 * 60 * 60 * 1000)),
     });
+    setShowCreateDialog(false);
   };
   
   // Mark a notification as read
@@ -467,7 +480,7 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                     </Button>
                   )}
                   <Button
-                    onClick={() => createSystemAlert('Test Alert', 'This is a test alert from your smart greenhouse system', 'info')}
+                    onClick={sendTestNotification}
                     variant="outline"
                     size="sm"
                     className="h-8 hover:bg-primary/10 transition-colors"
@@ -478,45 +491,14 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                 </div>
               </div>
               
-              {/* Enhanced filter controls */}
-              <div className="flex flex-wrap gap-3 mt-4 p-3 bg-muted/30 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="show-read"
-                    checked={showRead}
-                    onCheckedChange={setShowRead}
-                  />
-                  <Label htmlFor="show-read" className="text-sm flex items-center gap-1">
-                    {showRead ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                    {showRead ? "Show Read" : "Hide Read"}
-                  </Label>
-                </div>
-                
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-3 hover:bg-primary/10"
-                  onClick={() => setSortNewest(!sortNewest)}
-                >
-                  <ArrowDownUp className="h-3.5 w-3.5 mr-1" />
-                  {sortNewest ? "Newest First" : "Oldest First"}
-                </Button>
-                
-                <Select
-                  value={filteredType}
-                  onValueChange={(value) => setFilteredType(value as NotificationType | 'all')}
-                >
-                  <SelectTrigger className="h-8 w-[140px] border-muted">
-                    <SelectValue placeholder="Filter by type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="warning">⚠️ Warning</SelectItem>
-                    <SelectItem value="info">ℹ️ Info</SelectItem>
-                    <SelectItem value="success">✅ Success</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <NotificationFilters
+                showRead={showRead}
+                setShowRead={setShowRead}
+                sortNewest={sortNewest}
+                setSortNewest={setSortNewest}
+                filteredType={filteredType}
+                setFilteredType={setFilteredType}
+              />
             </CardHeader>
             
             <CardContent>
@@ -524,69 +506,13 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                 {getFilteredNotifications().length > 0 ? (
                   <div className="space-y-3">
                     {getFilteredNotifications().map((notification) => (
-                      <div 
-                        key={notification.id} 
-                        className={`group border-2 rounded-xl p-4 transition-all duration-300 hover:scale-[1.02] hover:shadow-md ${
-                          notification.read 
-                            ? 'bg-muted/20 border-muted' 
-                            : 'bg-card border-primary/20 shadow-sm'
-                        }`}
-                      >
-                        <div className="flex gap-3 items-start">
-                          <div className={`p-2 rounded-lg ${
-                            notification.type === 'warning' ? 'bg-destructive/10' : 
-                            notification.type === 'success' ? 'bg-green-500/10' : 'bg-primary/10'
-                          }`}>
-                            {notification.type === 'warning' && <AlertTriangle className="h-5 w-5 text-destructive" />}
-                            {notification.type === 'info' && <BellRing className="h-5 w-5 text-primary" />}
-                            {notification.type === 'success' && <CheckCircle className="h-5 w-5 text-green-500" />}
-                          </div>
-                          
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="font-semibold text-sm">{notification.title}</h4>
-                              <Badge 
-                                variant={
-                                  notification.type === 'warning' ? 'destructive' : 
-                                  notification.type === 'success' ? 'default' : 
-                                  'secondary'
-                                } 
-                                className="text-xs px-2 py-1"
-                              >
-                                {notification.type}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground mb-3">{notification.message}</p>
-                            <div className="flex justify-between items-center">
-                              <div className="flex items-center text-xs text-muted-foreground">
-                                <Clock className="h-3 w-3 mr-1" />
-                                {formatDate(notification.timestamp)}
-                              </div>
-                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                {!notification.read && (
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    className="h-7 px-2 hover:bg-primary/10"
-                                    onClick={() => markAsRead(notification.id)}
-                                  >
-                                    <CheckCheck className="h-3.5 w-3.5 mr-1" />
-                                    Read
-                                  </Button>
-                                )}
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-7 w-7 hover:bg-destructive/10 hover:text-destructive"
-                                  onClick={() => deleteNotification(notification.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      <NotificationCard
+                        key={notification.id}
+                        notification={notification}
+                        onMarkAsRead={markAsRead}
+                        onDelete={deleteNotification}
+                        formatDate={formatDate}
+                      />
                     ))}
                   </div>
                 ) : (
@@ -625,78 +551,14 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                   </div>
                   Plant Care Reminders
                 </CardTitle>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button
-                      onClick={createReminder}
-                      size="sm"
-                      className="hover:bg-primary/10 transition-colors"
-                    >
-                      <PlusCircle className="h-4 w-4 mr-1" />
-                      New Reminder
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="bg-card text-card-foreground border-2 shadow-lg">
-                    <DialogHeader>
-                      <DialogTitle>Create New Reminder</DialogTitle>
-                      <DialogDescription>
-                        Add a new plant care reminder to your schedule
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="reminder-title">Title</Label>
-                        <Input 
-                          id="reminder-title" 
-                          value={newReminder.title}
-                          onChange={(e) => setNewReminder({...newReminder, title: e.target.value})}
-                          placeholder="Enter reminder title"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="reminder-description">Description</Label>
-                        <Textarea 
-                          id="reminder-description"
-                          value={newReminder.description}
-                          onChange={(e) => setNewReminder({...newReminder, description: e.target.value})}
-                          placeholder="Enter details about this plant care task"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Due Date</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="w-full justify-start text-left font-normal hover:bg-primary/10 transition-colors"
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {newReminder.dueDate ? format(newReminder.dueDate, 'PPP') : <span>Pick a date</span>}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0 border-2 shadow-lg" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={newReminder.dueDate}
-                              onSelect={(date) => date && setNewReminder({...newReminder, dueDate: date})}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="ghost" onClick={() => {}}>Cancel</Button>
-                      <Button 
-                        onClick={saveNewReminder}
-                        disabled={!newReminder.title || !newReminder.description}
-                      >
-                        <Save className="h-4 w-4 mr-1" />
-                        Save Reminder
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                <Button
+                  onClick={createReminder}
+                  size="sm"
+                  className="hover:bg-primary/10 transition-colors"
+                >
+                  <PlusCircle className="h-4 w-4 mr-1" />
+                  New Reminder
+                </Button>
               </div>
             </CardHeader>
             
@@ -705,56 +567,14 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
                 {getFilteredReminders().length > 0 ? (
                   <div className="space-y-3">
                     {getFilteredReminders().map((reminder) => (
-                      <div 
-                        key={reminder.id} 
-                        className={`group border-2 rounded-xl p-4 transition-all duration-300 hover:scale-[1.02] hover:shadow-md ${
-                          reminder.completed 
-                            ? 'bg-muted/20 border-muted' 
-                            : reminder.dueDate < Date.now() 
-                              ? 'bg-destructive/10 border-destructive/30' 
-                              : 'bg-card border-primary/20 shadow-sm'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start gap-3">
-                            <Switch 
-                              checked={reminder.completed}
-                              onCheckedChange={() => toggleReminderCompletion(reminder.id, reminder.completed)}
-                              id={`reminder-${reminder.id}`}
-                              className="mt-1"
-                            />
-                            <div>
-                              <h4 className={`font-semibold text-sm ${reminder.completed ? 'line-through text-muted-foreground' : ''}`}>
-                                {reminder.title}
-                              </h4>
-                              <p className={`text-sm text-muted-foreground ${reminder.completed ? 'text-muted-foreground/70' : ''}`}>
-                                {reminder.description}
-                              </p>
-                            </div>
-                          </div>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 hover:bg-destructive/10 hover:text-destructive"
-                            onClick={() => deleteReminder(reminder.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div className="ml-10 mt-2 text-xs flex items-center">
-                          <Clock className="h-3 w-3 mr-1 text-muted-foreground" />
-                          <span className="text-muted-foreground">Due: {formatDate(reminder.dueDate)}</span>
-                          <Badge 
-                            variant={
-                              reminder.completed ? 'outline' : 
-                              reminder.dueDate < Date.now() ? 'destructive' : 'secondary'
-                            } 
-                            className="ml-2 text-[10px]"
-                          >
-                            {reminder.completed ? 'Completed' : getTimeRemaining(reminder.dueDate)}
-                          </Badge>
-                        </div>
-                      </div>
+                      <ReminderCard
+                        key={reminder.id}
+                        reminder={reminder}
+                        onToggleCompletion={toggleReminderCompletion}
+                        onDelete={deleteReminder}
+                        formatDate={formatDate}
+                        getTimeRemaining={getTimeRemaining}
+                      />
                     ))}
                   </div>
                 ) : (
@@ -784,6 +604,14 @@ export const Notifications = ({ database, sensorData }: NotificationsProps) => {
           <NotificationSettings />
         </TabsContent>
       </Tabs>
+
+      <CreateReminderDialog
+        isOpen={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        newReminder={newReminder}
+        setNewReminder={setNewReminder}
+        onSave={saveNewReminder}
+      />
     </div>
   );
 };
