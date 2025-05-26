@@ -407,7 +407,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-background/95 backdrop-blur-sm border rounded-lg p-3 shadow-lg">
+        <div className="bg-background border rounded-lg p-3 shadow-lg z-50">
           <p className="text-sm font-medium">{new Date(label).toLocaleString()}</p>
           {payload.map((entry: any, index: number) => (
             <p key={index} className="text-sm" style={{ color: entry.color }}>
@@ -421,7 +421,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
   };
   
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 p-4">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
@@ -439,7 +439,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
             size="sm"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="hover-scale"
+            className="transition-transform duration-200 hover:scale-105"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
@@ -465,8 +465,8 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
 
       {/* Real-time Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="sensor-card temperature-card hover-scale">
-          <CardContent className="p-4 sensor-card-content">
+        <Card className="transition-transform duration-200 hover:scale-105">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Temperature</p>
@@ -481,8 +481,8 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
           </CardContent>
         </Card>
 
-        <Card className="sensor-card humidity-card hover-scale">
-          <CardContent className="p-4 sensor-card-content">
+        <Card className="transition-transform duration-200 hover:scale-105">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Humidity</p>
@@ -497,8 +497,8 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
           </CardContent>
         </Card>
 
-        <Card className="sensor-card moisture-card hover-scale">
-          <CardContent className="p-4 sensor-card-content">
+        <Card className="transition-transform duration-200 hover:scale-105">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Soil Moisture</p>
@@ -513,8 +513,8 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
           </CardContent>
         </Card>
 
-        <Card className="sensor-card light-card hover-scale">
-          <CardContent className="p-4 sensor-card-content">
+        <Card className="transition-transform duration-200 hover:scale-105">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Light Level</p>
@@ -548,7 +548,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
         
         <TabsContent value="environmental">
           <div className="space-y-4">
-            <Card className="hover-scale">
+            <Card className="transition-transform duration-200 hover:scale-105">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
@@ -666,7 +666,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
                 { name: 'Pump', status: actuatorStats.pump.currentStatus, icon: Droplet, color: 'cyan' },
                 { name: 'Light', status: actuatorStats.light.currentStatus, icon: Lightbulb, color: 'amber' }
               ].map((item, index) => (
-                <Card key={item.name} className="hover-scale">
+                <Card key={item.name} className="transition-transform duration-200 hover:scale-105">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -680,7 +680,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
                           </p>
                         </div>
                       </div>
-                      <Badge variant={item.status ? "default" : "secondary"} className="animate-pulse">
+                      <Badge variant={item.status ? "default" : "secondary"}>
                         {item.status ? "ON" : "OFF"}
                       </Badge>
                     </div>
@@ -690,7 +690,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="hover-scale">
+              <Card className="transition-transform duration-200 hover:scale-105">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <BarChart3 className="h-5 w-5 text-primary" />
@@ -710,13 +710,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
                         <XAxis dataKey="name" />
                         <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
                         <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'var(--background)', 
-                            border: '1px solid var(--border)',
-                            borderRadius: '8px'
-                          }}
-                        />
+                        <Tooltip />
                         <Legend />
                         <Bar yAxisId="left" dataKey="onTime" name="Running Time (hours)" fill="#8884d8" radius={[4, 4, 0, 0]} />
                         <Bar yAxisId="right" dataKey="cycles" name="Activation Cycles" fill="#82ca9d" radius={[4, 4, 0, 0]} />
@@ -726,7 +720,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
                 </CardContent>
               </Card>
 
-              <Card className="hover-scale">
+              <Card className="transition-transform duration-200 hover:scale-105">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <PieChartIcon className="h-5 w-5 text-primary" />
@@ -762,7 +756,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
             </div>
 
             {/* Resource Usage Estimates */}
-            <Card className="hover-scale">
+            <Card className="transition-transform duration-200 hover:scale-105">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Zap className="h-5 w-5 text-primary" />
@@ -778,7 +772,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
                     { name: 'Light Energy', value: `${(actuatorStats.light.onTime * 25).toFixed(1)} Wh`, desc: '25W consumption', icon: Lightbulb },
                     { name: 'Water Usage', value: `${(actuatorStats.pump.onTime * 2).toFixed(1)} L`, desc: '2L/hour flow', icon: Droplet }
                   ].map((item, index) => (
-                    <div key={index} className="p-4 border rounded-lg bg-gradient-to-br from-card to-muted/20 hover-scale">
+                    <div key={index} className="p-4 border rounded-lg bg-gradient-to-br from-card to-muted/20 transition-transform duration-200 hover:scale-105">
                       <div className="flex items-center gap-2 mb-2">
                         <item.icon className="h-4 w-4 text-primary" />
                         <h3 className="font-medium text-sm">{item.name}</h3>
@@ -797,7 +791,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
           {growthPredictions.length > 0 ? (
             <div className="space-y-6">
               {growthPredictions.map((prediction, index) => (
-                <Card key={index} className="hover-scale">
+                <Card key={index} className="transition-transform duration-200 hover:scale-105">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Leaf className="h-5 w-5 text-emerald-500" />
@@ -888,7 +882,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
                               unit: '%'
                             }
                           ].map((factor, i) => (
-                            <div key={i} className="p-3 border rounded-md bg-gradient-to-br from-card to-muted/20 hover-scale">
+                            <div key={i} className="p-3 border rounded-md bg-gradient-to-br from-card to-muted/20 transition-transform duration-200 hover:scale-105">
                               <div className="flex justify-between items-center mb-2">
                                 <div className="flex items-center gap-1">
                                   <factor.icon className={`h-4 w-4 text-${factor.color}-500`} />
@@ -952,7 +946,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
               ))}
             </div>
           ) : (
-            <Card className="hover-scale">
+            <Card className="transition-transform duration-200 hover:scale-105">
               <CardContent className="flex flex-col items-center justify-center py-10">
                 <div className="relative">
                   <Leaf className="h-16 w-16 text-muted-foreground/30 mb-4" />
@@ -967,7 +961,7 @@ export const Analytics = ({ database, plants = [] }: AnalyticsProps) => {
                   Start growing smart! Add plants to your greenhouse to unlock AI-powered growth predictions, 
                   harvest estimates, and personalized care recommendations.
                 </p>
-                <Button variant="outline" className="hover-scale">
+                <Button variant="outline" className="transition-transform duration-200 hover:scale-105">
                   <CalendarDays className="mr-2 h-4 w-4" />
                   Add Your First Plant
                 </Button>
