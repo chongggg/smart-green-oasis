@@ -67,7 +67,3 @@ Then follow your hosting provider’s deployment instructions.
 ## Can I Use a Custom Domain?
 
 Yes. Most hosting providers allow you to connect your own domain by configuring DNS records. Check your hosting provider’s documentation for detailed steps.
-
----
-
-If you want, I can also make a **more concise version** so it’s shorter but still clear. Do you want me to prepare that too?
