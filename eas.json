@@ -6,16 +6,20 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "installCommand": "bun install"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "installCommand": "bun install"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "installCommand": "bun install"
     }
   },
   "submit": {
     "production": {}
   }
 }
+
